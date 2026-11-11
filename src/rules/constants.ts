@@ -1,5 +1,6 @@
 export const RULES = {
   handLimit: 10,
   openingHand: [3, 4],
-  turnSeconds: 75
+  turnSeconds: 75,
+  settleRounds: 32
 } as const

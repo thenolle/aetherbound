@@ -1,3 +1,4 @@
+import type { Effect } from '../shared/effects'
 import type { Id } from '../shared/ids'
 import type { KeywordId } from '../shared/lexicon'
 
@@ -11,6 +12,18 @@ export type Minion = {
   maxHealth: number
   exhausted: boolean
   keywords: KeywordId[]
+  onDeath: Effect[]
+}
+
+export type Weapon = {
+  cardId: Id<'card'>
+  attack: number
+  durability: number
+}
+
+export type HeroAbility = {
+  cost: number
+  effects: Effect[]
 }
 
 export type PlayerState = {
@@ -19,7 +32,12 @@ export type PlayerState = {
   heroMaxHealth: number
   aetherMax: number
   aether: number
+  tariff: number
   fatigue: number
+  weapon: Weapon | null
+  heroAttacked: boolean
+  ability: HeroAbility
+  abilityUsed: boolean
   deck: Id<'card'>[]
   hand: Id<'card'>[]
   board: Minion[]
@@ -38,9 +56,12 @@ export type MatchState = {
 export type AttackTarget = { kind: 'hero' } | { kind: 'minion', uid: number }
 
 export type Command =
-  | { type: 'play', handIndex: number, position: number }
+  | { type: 'play', handIndex: number, position: number, targetUid?: number }
   | { type: 'cast', handIndex: number, targetUid?: number }
+  | { type: 'equip', handIndex: number }
   | { type: 'attack', attackerUid: number, target: AttackTarget }
+  | { type: 'hero_attack', target: AttackTarget }
+  | { type: 'hero_ability', targetUid?: number }
   | { type: 'end_turn' }
   | { type: 'surrender' }
 
@@ -52,9 +73,14 @@ export type GameEvent =
   | { type: 'fatigue', player: PlayerIndex, damage: number }
   | { type: 'minion_played', player: PlayerIndex, uid: number, cardId: Id<'card'>, position: number }
   | { type: 'writ_cast', player: PlayerIndex, cardId: Id<'card'> }
+  | { type: 'iron_equipped', player: PlayerIndex, cardId: Id<'card'>, attack: number, durability: number }
+  | { type: 'iron_broken', player: PlayerIndex }
+  | { type: 'ability_used', player: PlayerIndex }
   | { type: 'attacked', player: PlayerIndex, attackerUid: number, target: AttackTarget }
+  | { type: 'hero_attacked', player: PlayerIndex, target: AttackTarget }
   | { type: 'damaged', player: PlayerIndex, uid: number | null, amount: number }
   | { type: 'healed', player: PlayerIndex, uid: number | null, amount: number }
+  | { type: 'taxed', player: PlayerIndex, amount: number }
   | { type: 'minion_died', player: PlayerIndex, uid: number }
   | { type: 'surrendered', player: PlayerIndex }
   | { type: 'game_over', winner: PlayerIndex }

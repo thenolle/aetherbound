@@ -20,7 +20,7 @@ const codeOf = (fn: () => unknown): string | null => {
 
 const minion = (uid: number, n: number, exhausted = false): Minion => {
   const { attack, health } = stats(n)
-  return { uid, cardId: cid(n), attack, health, maxHealth: health, exhausted, keywords: [] }
+  return { uid, cardId: cid(n), attack, health, maxHealth: health, exhausted, keywords: [], onDeath: [] }
 }
 
 const endTurn: Command = { type: 'end_turn' }

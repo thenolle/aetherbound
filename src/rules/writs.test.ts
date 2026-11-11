@@ -34,7 +34,7 @@ const codeOf = (fn: () => unknown): string | null => {
 
 const mk = (uid: number, n: number): Minion => {
   const { attack, health } = stats(n)
-  return { uid, cardId: cid(n), attack, health, maxHealth: health, exhausted: false, keywords: [] }
+  return { uid, cardId: cid(n), attack, health, maxHealth: health, exhausted: false, keywords: [], onDeath: [] }
 }
 
 describe('writs', () => {

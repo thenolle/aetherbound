@@ -39,7 +39,11 @@ export const fixtureHero: HeroDefinition = {
   title: { en: 'Tester', fr: 'Testeur' },
   faction: 'exchequer',
   health: 30,
-  ability: { name: { en: 'Test Ability', fr: "Capacite d'essai" }, cost: 2 }
+  ability: {
+    name: { en: 'Test Ability', fr: "Capacite d'essai" },
+    cost: 2,
+    effects: [{ kind: 'damage', amount: 1, target: 'enemy-hero' }]
+  }
 }
 
 export const fixtureDeck: readonly Id<'card'>[] = fixtureCards.flatMap((card) => [card.id, card.id])

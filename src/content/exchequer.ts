@@ -7,7 +7,11 @@ export const EXCHEQUER_HERO: HeroDefinition = {
   title: { en: 'Debt-Auditor', fr: 'Auditrice des Dettes' },
   faction: 'exchequer',
   health: 30,
-  ability: { name: { en: 'Stamp Tariff', fr: 'Apposer le Tarif' }, cost: 2 }
+  ability: {
+    name: { en: 'Stamp Tariff', fr: 'Apposer le Tarif' },
+    cost: 2,
+    effects: [{ kind: 'tariff', amount: 1 }]
+  }
 }
 
 export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
@@ -49,6 +53,19 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
     flavor: { en: 'The bridge is free. Crossing it is not.', fr: 'Le pont est gratuit. Le traverser, non.' }
   },
   {
+    id: parseId('card', 'tithe-hound'),
+    name: { en: 'Tithe-Hound', fr: 'Limier de la Dime' },
+    faction: 'exchequer',
+    family: 'bound',
+    rarity: 'common',
+    cost: 2,
+    unique: false,
+    attack: 2,
+    health: 1,
+    onDeath: [{ kind: 'damage', amount: 1, target: 'enemy-hero' }],
+    flavor: { en: 'The tithe is collected even after the collector is dead.', fr: 'La dime se leve meme apres la mort du collecteur.' }
+  },
+  {
     id: parseId('card', 'bailiff-vane'),
     name: { en: 'Bailiff Vane', fr: 'Huissier Vane' },
     faction: 'exchequer',
@@ -59,6 +76,19 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
     attack: 3,
     health: 3,
     flavor: { en: 'Paid in full, or paid in kind.', fr: 'Paye en totalite, ou paye en nature.' }
+  },
+  {
+    id: parseId('card', 'surveyor-pell'),
+    name: { en: 'Surveyor Pell', fr: 'Arpenteur Pell' },
+    faction: 'exchequer',
+    family: 'bound',
+    rarity: 'rare',
+    cost: 3,
+    unique: false,
+    attack: 2,
+    health: 3,
+    onPlay: [{ kind: 'damage', amount: 1, target: 'chosen-enemy-minion' }],
+    flavor: { en: 'Every wall gets measured. Some get measured down.', fr: 'Chaque mur est mesure. Certains sont mesures a la baisse.' }
   },
   {
     id: parseId('card', 'seal-bearer'),
@@ -85,6 +115,18 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
     flavor: { en: 'Clause nine: no exceptions for the dead.', fr: 'Clause neuf : aucune exception pour les morts.' }
   },
   {
+    id: parseId('card', 'assessors-pike'),
+    name: { en: "Assessor's Pike", fr: "Pique de l'Assesseur" },
+    faction: 'exchequer',
+    family: 'iron',
+    rarity: 'common',
+    cost: 2,
+    unique: false,
+    attack: 2,
+    durability: 2,
+    flavor: { en: 'Measured twice, driven once.', fr: 'Mesuree deux fois, plantee une fois.' }
+  },
+  {
     id: parseId('card', 'writ-of-seizure'),
     name: { en: 'Writ of Seizure', fr: 'Mandat de Saisie' },
     faction: 'exchequer',
@@ -97,7 +139,7 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
   },
   {
     id: parseId('card', 'audit-of-arrears'),
-    name: { en: 'Audit of Arrears', fr: "Audit des Arrieres" },
+    name: { en: 'Audit of Arrears', fr: 'Audit des Arrieres' },
     faction: 'exchequer',
     family: 'writ',
     rarity: 'rare',

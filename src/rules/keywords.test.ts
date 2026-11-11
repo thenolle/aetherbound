@@ -23,7 +23,7 @@ const codeOf = (fn: () => unknown): string | null => {
 
 const mk = (uid: number, n: number, keywords: KeywordId[] = []): Minion => {
   const { attack, health } = stats(n)
-  return { uid, cardId: cid(n), attack, health, maxHealth: health, exhausted: false, keywords }
+  return { uid, cardId: cid(n), attack, health, maxHealth: health, exhausted: false, keywords, onDeath: [] }
 }
 
 const hitHero: Command = { type: 'attack', attackerUid: 1, target: { kind: 'hero' } }
