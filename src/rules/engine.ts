@@ -191,6 +191,24 @@ function applyEffect(state: MatchState, caster: PlayerIndex, effect: Effect, cho
     if (burst > 0) damageHero(state, foe, burst, events)
     return
   }
+  if (effect.kind === 'buff') {
+    for (const minion of state.players[caster].board) {
+      minion.attack += effect.attack
+      minion.health += effect.health
+      minion.maxHealth += effect.health
+      events.push({ type: 'buffed', player: caster, uid: minion.uid, attack: minion.attack, health: minion.health })
+    }
+    return
+  }
+  if (effect.kind === 'forge') {
+    const weapon = state.players[caster].weapon
+    if (weapon !== null) {
+      weapon.attack += effect.attack
+      weapon.durability += effect.durability
+      events.push({ type: 'forged', player: caster, attack: weapon.attack, durability: weapon.durability })
+    }
+    return
+  }
   if (effect.kind !== 'damage' && effect.kind !== 'heal') return
   const amount = effect.amount
   const harmful = effect.kind === 'damage'
@@ -221,6 +239,9 @@ function applyEffect(state: MatchState, caster: PlayerIndex, effect: Effect, cho
       break
     case 'all-enemy-minions':
       for (const minion of state.players[foe].board) affectMinion(foe, minion)
+      break
+    case 'all-own-minions':
+      for (const minion of state.players[caster].board) affectMinion(caster, minion)
       break
   }
 }

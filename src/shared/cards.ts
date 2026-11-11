@@ -60,6 +60,12 @@ function checkEffects(effects: readonly Effect[], fail: Fail): void {
       if (!Number.isInteger(effect.count) || effect.count < 1 || effect.count > GAME_LIMITS.boardSlots) fail('rupture count must be 1 to 7')
     } else if (effect.kind === 'surge') {
       if (!Number.isInteger(effect.amount) || effect.amount < 1 || effect.amount > GAME_LIMITS.aetherPressureMax) fail('surge amount must be 1 to 10')
+    } else if (effect.kind === 'forge') {
+      const valid = Number.isInteger(effect.attack) && Number.isInteger(effect.durability) && effect.attack >= 0 && effect.durability >= 0 && effect.attack <= 5 && effect.durability <= 5
+      if (!valid || effect.attack + effect.durability === 0) fail('forge needs integer bonuses from 0 to 5, not both zero')
+    } else if (effect.kind === 'buff') {
+      const valid = Number.isInteger(effect.attack) && Number.isInteger(effect.health) && effect.attack >= 0 && effect.health >= 0 && effect.attack <= 9 && effect.health <= 9
+      if (!valid || effect.attack + effect.health === 0) fail('buff needs integer bonuses from 0 to 9, not both zero')
     } else if ('amount' in effect && (!Number.isInteger(effect.amount) || effect.amount < 1 || effect.amount > 99)) {
       fail('effect amount must be 1 to 99')
     }

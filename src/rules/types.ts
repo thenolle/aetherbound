@@ -127,3 +127,5 @@ export type GameEvent =
   | { type: 'blighted', player: PlayerIndex, uid: number, stacks: number }
   | { type: 'grew', player: PlayerIndex, uid: number, attack: number, health: number }
   | { type: 'surged', player: PlayerIndex, amount: number }
+  | { type: 'buffed', player: PlayerIndex, uid: number, attack: number, health: number }
+  | { type: 'forged', player: PlayerIndex, attack: number, durability: number }

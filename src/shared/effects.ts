@@ -1,7 +1,6 @@
 import type { Id } from './ids'
 
-export type EffectTarget = 'enemy-hero' | 'own-hero' | 'chosen-enemy-minion' | 'all-enemy-minions'
-
+export type EffectTarget = 'enemy-hero' | 'own-hero' | 'chosen-enemy-minion' | 'all-enemy-minions' | 'all-own-minions'
 export type Effect =
   | Readonly<{ kind: 'damage' | 'heal', amount: number, target: EffectTarget }>
   | Readonly<{ kind: 'freeze', target: EffectTarget }>
@@ -12,11 +11,12 @@ export type Effect =
   | Readonly<{ kind: 'tariff', amount: number }>
   | Readonly<{ kind: 'surge', amount: number }>
   | Readonly<{ kind: 'rupture', count: number }>
+  | Readonly<{ kind: 'forge', attack: number, durability: number }>
+  | Readonly<{ kind: 'buff', attack: number, health: number }>
 
 export type TokenEffect = Extract<Effect, { kind: 'summon' | 'raise' }>
 
 export const MAX_EFFECTS_PER_CARD = 8
-
 export const SNARE_TRIGGERS = ['enemy-play', 'enemy-cast', 'enemy-attack'] as const
 
 export type SnareTrigger = typeof SNARE_TRIGGERS[number]

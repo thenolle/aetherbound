@@ -46,6 +46,8 @@ const ALL_EVENTS: readonly ViewEvent[] = [
   { type: 'minion_summoned', player: 0, uid: 12, cardId: cid(9) },
   { type: 'blighted', player: 1, uid: 5, stacks: 3 },
   { type: 'grew', player: 0, uid: 12, attack: 4, health: 6 },
+  { type: 'buffed', player: 0, uid: 4, attack: 3, health: 3 },
+  { type: 'forged', player: 1, attack: 4, durability: 2 },
 ]
 
 const eventsMessage: ServerMessage = {
@@ -81,6 +83,9 @@ function richState() {
       { kind: 'raise', cardId: cid(9), attack: 2, health: 1, count: 2 },
       { kind: 'surge', amount: 3 },
       { kind: 'rupture', count: 2 },
+      { kind: 'forge', attack: 1, durability: 1 },
+      { kind: 'buff', attack: 1, health: 2 },
+      { kind: 'heal', amount: 2, target: 'all-own-minions' },
     ]
   }]
   state.players[1].board = [{ uid: 2, cardId: cid(3), attack: 3, health: 3, maxHealth: 3, exhausted: false, keywords: [], onDeath: [] }]

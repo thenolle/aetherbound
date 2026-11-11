@@ -61,11 +61,13 @@ export const EVENT_IDS = {
   blighted: 29,
   grew: 30,
   surged: 31,
+  buffed: 32,
+  forged: 33,
 } as const satisfies Record<ViewEvent['type'], number>
 
 const MESSAGE_TYPE_BY_ID = new Map<number, ServerMessage['type']>((Object.keys(MESSAGE_IDS) as ServerMessage['type'][]).map((type) => [MESSAGE_IDS[type], type]))
 const EVENT_TYPE_BY_ID = new Map<number, ViewEvent['type']>((Object.keys(EVENT_IDS) as ViewEvent['type'][]).map((type) => [EVENT_IDS[type], type]))
-const EFFECT_TARGETS: readonly EffectTarget[] = ['enemy-hero', 'own-hero', 'chosen-enemy-minion', 'all-enemy-minions']
+const EFFECT_TARGETS: readonly EffectTarget[] = ['enemy-hero', 'own-hero', 'chosen-enemy-minion', 'all-enemy-minions', 'all-own-minions']
 
 type SharedSide = Omit<PlayerState, 'deck' | 'hand' | 'snares'> & { deckCount: number }
 
@@ -213,6 +215,16 @@ function writeEffect(w: ByteWriter, effect: Effect): void {
       w.u8(3)
       w.varuint(effect.amount)
       return
+    case 'forge':
+      w.u8(11)
+      w.varuint(effect.attack)
+      w.varuint(effect.durability)
+      return
+    case 'buff':
+      w.u8(12)
+      w.varuint(effect.attack)
+      w.varuint(effect.health)
+      return
   }
 }
 
@@ -242,6 +254,8 @@ function readEffect(r: ByteReader): Effect {
   if (kind === 8) return { kind: 'raise', cardId: readId(r, 'card'), attack: r.varuint(), health: r.varuint(), count: r.varuint() }
   if (kind === 9) return { kind: 'surge', amount: r.varuint() }
   if (kind === 10) return { kind: 'rupture', count: r.varuint() }
+  if (kind === 11) return { kind: 'forge', attack: r.varuint(), durability: r.varuint() }
+  if (kind === 12) return { kind: 'buff', attack: r.varuint(), health: r.varuint() }
   throw malformed('invalid effect kind')
 }
 
@@ -577,6 +591,17 @@ function writeEvent(w: ByteWriter, event: ViewEvent): void {
       w.u8(event.player)
       w.varuint(event.amount)
       return
+    case 'buffed':
+      w.u8(event.player)
+      w.varuint(event.uid)
+      w.varuint(event.attack)
+      w.varuint(event.health)
+      return
+    case 'forged':
+      w.u8(event.player)
+      w.varuint(event.attack)
+      w.varuint(event.durability)
+      return
   }
 }
 
@@ -615,6 +640,8 @@ function readEvent(r: ByteReader): ViewEvent {
     case 'blighted': return { type, player: readPlayer(r), uid: r.varuint(), stacks: r.varuint() }
     case 'grew': return { type, player: readPlayer(r), uid: r.varuint(), attack: r.varuint(), health: r.varuint() }
     case 'surged': return { type, player: readPlayer(r), amount: r.varuint() }
+    case 'buffed': return { type, player: readPlayer(r), uid: r.varuint(), attack: r.varuint(), health: r.varuint() }
+    case 'forged': return { type, player: readPlayer(r), attack: r.varuint(), durability: r.varuint() }
   }
 }
 
