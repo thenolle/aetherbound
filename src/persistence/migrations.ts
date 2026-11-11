@@ -133,4 +133,12 @@ CREATE TABLE rating_updates (
 );
 `
   },
+  {
+    version: 5,
+    name: 'match mode',
+    sql: `
+ALTER TABLE matches ADD COLUMN mode TEXT NOT NULL DEFAULT 'casual' CHECK (mode IN ('casual', 'ranked'));
+CREATE INDEX matches_ranked_pending ON matches (mode, ended_at);
+`
+  },
 ]

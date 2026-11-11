@@ -19,9 +19,12 @@ export type MatchHeader = Readonly<{
   heroes: readonly [string, string]
   decks: readonly [readonly Id<'card'>[], readonly Id<'card'>[]]
   accounts: readonly [string | null, string | null]
+  mode: MatchMode
 }>
 
 export type MatchOutcome = Readonly<{ winner: PlayerIndex, endedAt: number }>
+
+export type MatchMode = 'casual' | 'ranked'
 
 export type StoredMatch = Readonly<{
   header: MatchHeader
@@ -57,6 +60,7 @@ type MatchRow = {
   ended_at: number | null
   account_0: string | null
   account_1: string | null
+  mode: string
 }
 
 type EntryRow = { idx: number, kind: string, actor: number | null, frame: Uint8Array | null }
@@ -71,12 +75,7 @@ type SummaryRow = {
   name_1: string | null
 }
 
-export function describeMatch(
-  matchId: string,
-  setup: MatchSetup,
-  createdAt: number,
-  accounts: readonly [string | null, string | null] = [null, null]
-): MatchHeader {
+export function describeMatch(matchId: string, setup: MatchSetup, createdAt: number, accounts: readonly [string | null, string | null] = [null, null], mode: MatchMode = 'casual'): MatchHeader {
   return {
     id: matchId,
     createdAt,
@@ -85,15 +84,19 @@ export function describeMatch(
     seed: setup.seed,
     heroes: [setup.players[0].hero.id, setup.players[1].hero.id],
     decks: [[...setup.players[0].deck], [...setup.players[1].deck]],
-    accounts
+    accounts,
+    mode
   }
+}
+
+function toMode(value: string): MatchMode {
+  if (value === 'casual' || value === 'ranked') return value
+  throw new Error('corrupt mode column')
 }
 
 function parseDeck(text: string): Id<'card'>[] {
   const value: unknown = JSON.parse(text)
-  if (!Array.isArray(value) || !value.every((item): item is string => typeof item === 'string')) {
-    throw new Error('corrupt deck column')
-  }
+  if (!Array.isArray(value) || !value.every((item): item is string => typeof item === 'string')) throw new Error('corrupt deck column')
   return value.map((id) => parseId('card', id))
 }
 
@@ -114,9 +117,7 @@ export class SqliteMatchStore implements MatchRecorder {
 
   constructor(db: Database) {
     this.db = db
-    this.insertMatch = db.prepare(
-      'INSERT INTO matches (id, created_at, rules_version, content_schema_version, seed, hero_0, hero_1, deck_0, deck_1, account_0, account_1) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)'
-    )
+    this.insertMatch = db.prepare('INSERT INTO matches (id, created_at, rules_version, content_schema_version, seed, hero_0, hero_1, deck_0, deck_1, account_0, account_1, mode) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)')
     this.nextIndex = db.prepare('SELECT COALESCE(MAX(idx) + 1, 0) AS next FROM match_log WHERE match_id = ?1')
     this.insertEntry = db.prepare('INSERT INTO match_log (match_id, idx, kind, actor, frame) VALUES (?1, ?2, ?3, ?4, ?5)')
     this.finishMatch = db.prepare('UPDATE matches SET winner = ?1, ended_at = ?2 WHERE id = ?3 AND winner IS NULL')
@@ -124,12 +125,12 @@ export class SqliteMatchStore implements MatchRecorder {
     this.selectEntries = db.prepare('SELECT idx, kind, actor, frame FROM match_log WHERE match_id = ?1 ORDER BY idx')
     this.selectSummaries = db.prepare(
       `SELECT m.id, m.created_at, m.winner, m.ended_at, m.account_0, a0.display_name AS name_0, a1.display_name AS name_1
-       FROM matches m
-       LEFT JOIN accounts a0 ON a0.id = m.account_0
-       LEFT JOIN accounts a1 ON a1.id = m.account_1
-       WHERE m.account_0 = ?1 OR m.account_1 = ?1
-       ORDER BY m.created_at DESC
-       LIMIT ?2`
+        FROM matches m
+        LEFT JOIN accounts a0 ON a0.id = m.account_0
+        LEFT JOIN accounts a1 ON a1.id = m.account_1
+        WHERE m.account_0 = ?1 OR m.account_1 = ?1
+        ORDER BY m.created_at DESC
+        LIMIT ?2`
     )
   }
 
@@ -155,11 +156,8 @@ export class SqliteMatchStore implements MatchRecorder {
       const expected = row?.next ?? 0
       if (expected !== firstIndex) throw new Error(`log gap for match ${matchId}: expected index ${expected}, got ${firstIndex}`)
       entries.forEach((entry, offset) => {
-        if (entry.kind === 'timeout') {
-          this.insertEntry.run(matchId, firstIndex + offset, 'timeout', null, null)
-        } else {
-          this.insertEntry.run(matchId, firstIndex + offset, 'command', entry.actor, encodeCommandFrame(0, entry.commandId, entry.command))
-        }
+        if (entry.kind === 'timeout') this.insertEntry.run(matchId, firstIndex + offset, 'timeout', null, null)
+        else this.insertEntry.run(matchId, firstIndex + offset, 'command', entry.actor, encodeCommandFrame(0, entry.commandId, entry.command))
       })
       if (outcome !== null) this.finishMatch.run(outcome.winner, outcome.endedAt, matchId)
     })
@@ -168,7 +166,6 @@ export class SqliteMatchStore implements MatchRecorder {
   load(matchId: string): StoredMatch | null {
     const row = this.selectMatch.get(matchId) as MatchRow | null
     if (row === null) return null
-
     const entries = (this.selectEntries.all(matchId) as EntryRow[]).map((entry, position): InputEntry => {
       if (entry.idx !== position) throw new Error(`corrupt log for match ${matchId}: gap at index ${position}`)
       if (entry.kind === 'timeout') return { kind: 'timeout' }
@@ -176,7 +173,6 @@ export class SqliteMatchStore implements MatchRecorder {
       const decoded = decodeCommandFrame(entry.frame)
       return { kind: 'command', actor: toPlayer(entry.actor), commandId: decoded.commandId, command: decoded.command }
     })
-
     return {
       header: {
         id: row.id,
@@ -186,7 +182,8 @@ export class SqliteMatchStore implements MatchRecorder {
         seed: row.seed,
         heroes: [row.hero_0, row.hero_1],
         decks: [parseDeck(row.deck_0), parseDeck(row.deck_1)],
-        accounts: [row.account_0, row.account_1]
+        accounts: [row.account_0, row.account_1],
+        mode: toMode(row.mode),
       },
       outcome: row.winner === null || row.ended_at === null ? null : { winner: toPlayer(row.winner), endedAt: row.ended_at },
       entries

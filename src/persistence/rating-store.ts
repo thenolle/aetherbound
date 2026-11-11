@@ -1,6 +1,6 @@
 import type { Database } from 'bun:sqlite'
-import { DEFAULT_RATING, updateRatings } from '../ranked/rating'
-import type { Rated, RatingConfig } from '../ranked/rating'
+import { DEFAULT_RATING, updateRatings, visibleRank } from '../ranked/rating'
+import type { Rated, RatingConfig, VisibleRank } from '../ranked/rating'
 import { withTransaction } from './database'
 
 type Prepared = ReturnType<Database['prepare']>
@@ -15,6 +15,14 @@ export type RatingUpdate = Readonly<{
   loserAfter: number
 }>
 
+export type RankReport = Readonly<{
+  gamesPlayed: number
+  placementGamesLeft: number
+  rank: VisibleRank | null
+}>
+
+type PendingRow = { match_id: string, winner: number, account_0: string, account_1: string }
+
 export class SqliteRatingStore {
   private readonly db: Database
   private readonly now: () => number
@@ -23,20 +31,17 @@ export class SqliteRatingStore {
   private readonly upsertRating: Prepared
   private readonly selectUpdate: Prepared
   private readonly insertUpdate: Prepared
+  private readonly selectPending: Prepared
 
   constructor(db: Database, now: () => number, config: RatingConfig = DEFAULT_RATING) {
     this.db = db
     this.now = now
     this.config = config
     this.selectRating = db.prepare('SELECT mmr, games FROM ratings WHERE account_id = ?1')
-    this.upsertRating = db.prepare(
-      `INSERT INTO ratings (account_id, mmr, games, updated_at) VALUES (?1, ?2, ?3, ?4)
-       ON CONFLICT (account_id) DO UPDATE SET mmr = excluded.mmr, games = excluded.games, updated_at = excluded.updated_at`
-    )
+    this.upsertRating = db.prepare(`INSERT INTO ratings (account_id, mmr, games, updated_at) VALUES (?1, ?2, ?3, ?4) ON CONFLICT (account_id) DO UPDATE SET mmr = excluded.mmr, games = excluded.games, updated_at = excluded.updated_at`)
     this.selectUpdate = db.prepare('SELECT 1 AS found FROM rating_updates WHERE match_id = ?1')
-    this.insertUpdate = db.prepare(
-      'INSERT INTO rating_updates (match_id, winner_id, loser_id, winner_before, winner_after, loser_before, loser_after, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)'
-    )
+    this.insertUpdate = db.prepare('INSERT INTO rating_updates (match_id, winner_id, loser_id, winner_before, winner_after, loser_before, loser_after, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)')
+    this.selectPending = db.prepare(`SELECT m.id AS match_id, m.winner, m.account_0, m.account_1 FROM matches m LEFT JOIN rating_updates r ON r.match_id = m.id WHERE m.mode = 'ranked' AND m.winner IS NOT NULL AND m.account_0 IS NOT NULL AND m.account_1 IS NOT NULL AND r.match_id IS NULL ORDER BY m.ended_at LIMIT ?1`)
   }
 
   get(accountId: string): Rated {
@@ -56,5 +61,24 @@ export class SqliteRatingStore {
       this.insertUpdate.run(matchId, winnerId, loserId, winner.mmr, next.winner, loser.mmr, next.loser, now)
       return { matchId, winnerId, loserId, winnerBefore: winner.mmr, winnerAfter: next.winner, loserBefore: loser.mmr, loserAfter: next.loser }
     })
+  }
+
+  rankFor(accountId: string): RankReport {
+    const rated = this.get(accountId)
+    return {
+      gamesPlayed: rated.games,
+      placementGamesLeft: Math.max(0, this.config.placementGames - rated.games),
+      rank: visibleRank(rated, this.config)
+    }
+  }
+
+  reconcile(limit = 100): number {
+    let applied = 0
+    for (const row of this.selectPending.all(limit) as PendingRow[]) {
+      const winnerId = row.winner === 0 ? row.account_0 : row.account_1
+      const loserId = row.winner === 0 ? row.account_1 : row.account_0
+      if (this.applyResult(row.match_id, winnerId, loserId) !== null) applied += 1
+    }
+    return applied
   }
 }

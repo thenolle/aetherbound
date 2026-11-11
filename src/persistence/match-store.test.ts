@@ -54,4 +54,11 @@ describe('SqliteMatchStore', () => {
     db.run("UPDATE match_log SET frame = x'ff' WHERE match_id = 'm1' AND idx = 0")
     expect(() => store.load('m1')).toThrow(ProtocolError)
   })
+
+  test('the match mode is stored and defaults to casual', () => {
+    store.begin(describeMatch('r1', fixtureSetup(5), 1, [null, null], 'ranked'))
+    store.begin(describeMatch('c1', fixtureSetup(5), 1))
+    expect(store.load('r1')?.header.mode).toBe('ranked')
+    expect(store.load('c1')?.header.mode).toBe('casual')
+  })
 })

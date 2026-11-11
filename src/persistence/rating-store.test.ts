@@ -52,4 +52,17 @@ describe('SqliteRatingStore', () => {
     expect(() => store.applyResult('m1', alice, alice)).toThrow('themselves')
     expect(store.get(alice).games).toBe(0)
   })
+
+  test('the visible rank appears only after the placement games', () => {
+    for (let index = 0; index < 5; index += 1) {
+      match(`m${index}`)
+      store.applyResult(`m${index}`, alice, bob)
+      if (index === 3) expect(store.rankFor(alice)).toEqual({ gamesPlayed: 4, placementGamesLeft: 1, rank: null })
+    }
+    const report = store.rankFor(alice)
+    expect(report.gamesPlayed).toBe(5)
+    expect(report.placementGamesLeft).toBe(0)
+    expect(report.rank).not.toBeNull()
+    expect(JSON.stringify(report)).not.toContain('mmr')
+  })
 })
