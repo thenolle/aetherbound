@@ -22,4 +22,10 @@ describe('brine-lock cartel', () => {
     const side = { hero: BRINE_LOCK_HERO, deck: BRINE_LOCK_DECK }
     expect(createMatch({ seed: 4, registry, players: [side, side] }).state.turn).toBe(1)
   })
+
+  test('the roster has twenty-five cards and the starter list only uses the original fifteen', () => {
+    expect(BRINE_LOCK_CARDS).toHaveLength(25)
+    expect(new Set(BRINE_LOCK_DECK).size).toBe(15)
+    expect(BRINE_LOCK_CARDS.filter((entry) => entry.family === 'oath')).toHaveLength(1)
+  })
 })
