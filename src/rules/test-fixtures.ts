@@ -29,7 +29,9 @@ export function makeCard(n: number, overrides: Partial<CardDefinition> = {}): Ca
   }
 }
 
-export const fixtureCards: readonly CardDefinition[] = Array.from({ length: 15 }, (_, index) => makeCard(index + 1))
+export const fixtureCards: readonly CardDefinition[] = Array.from({ length: 15 }, (_, index) =>
+  makeCard(index + 1, index >= 12 ? { rarity: 'rare' } : {})
+)
 
 export const fixtureRegistry = createRegistry(fixtureCards)
 
