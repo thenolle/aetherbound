@@ -185,7 +185,8 @@ async function start(): Promise<void> {
   queueing = true
   status = `signed in as ${playerName}: searching for an opponent (Escape cancels)`
   render()
-  let queue: unknown = await postJson('/api/queue/join')
+  const mode = params.get('mode') === 'ranked' ? '?mode=ranked' : ''
+  let queue: unknown = await postJson(`/api/queue/join${mode}`)
   while (queueing) {
     if (fieldOf(queue, 'status') === 'matched') {
       const token = fieldOf(queue, 'token')
