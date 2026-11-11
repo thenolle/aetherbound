@@ -1,5 +1,6 @@
 import { backupDatabase, backupName, rotateBackups } from '../persistence/backup'
 import { openDatabase } from '../persistence/database'
+import { MIGRATIONS } from '../persistence/migrations'
 
 const path = process.env.DATABASE_PATH ?? 'data/aetherbound.db'
 const dir = process.env.BACKUP_DIR ?? 'backups'
@@ -10,7 +11,8 @@ const result = backupDatabase(database, `${dir}/${backupName(Date.now())}`)
 database.close()
 
 const healthy = result.integrity === 'ok' && result.foreignKeyProblems === 0
-console.log(`backup ${result.path}: ${result.bytes} bytes, schema ${result.schemaVersion}, integrity ${result.integrity}, rows ${JSON.stringify(result.rows)}`)
+console.log(`backup ${result.path}: ${result.bytes} bytes, schema ${result.schemaVersion} of ${MIGRATIONS.length}, integrity ${result.integrity}, rows ${JSON.stringify(result.rows)}`)
+if (result.schemaVersion < MIGRATIONS.length) console.log('note: this database is older than the current schema; the server migrates it on start')
 if (!healthy) {
   console.error('the backup did not verify: keeping it for inspection and skipping rotation')
   process.exit(1)
