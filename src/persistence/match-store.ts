@@ -146,7 +146,8 @@ export class SqliteMatchStore implements MatchRecorder {
       JSON.stringify(header.decks[0]),
       JSON.stringify(header.decks[1]),
       header.accounts[0],
-      header.accounts[1]
+      header.accounts[1],
+      header.mode
     )
   }
 
