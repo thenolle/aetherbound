@@ -1,5 +1,6 @@
 import type { PlayerIndex } from '../rules/types'
 import type { AppConfig } from '../shared/config'
+import type { Auth } from './auth'
 import { buildClientBundle } from './client-bundle'
 import { devMatchSetup } from './dev-match'
 import { handleRequest } from './http'
@@ -30,7 +31,7 @@ function originAllowed(request: Request, url: URL): boolean {
   }
 }
 
-export function createGameServer(config: AppConfig, isReady: Readiness, rooms: RoomRegistry) {
+export function createGameServer(config: AppConfig, isReady: Readiness, rooms: RoomRegistry, auth: Auth) {
   let bundle: Promise<string> | null = null
   const clientBundle = (): Promise<string> => {
     bundle ??= buildClientBundle().catch((error: unknown) => {
@@ -50,11 +51,16 @@ export function createGameServer(config: AppConfig, isReady: Readiness, rooms: R
       if (url.pathname === '/ws') {
         if (!originAllowed(request, url)) return json({ error: 'forbidden_origin' }, 403)
         const binding = rooms.lookup(url.searchParams.get('token') ?? '')
-        if (binding === null) return json({ error: 'unauthorized' }, 401)
+        const account = auth.authenticate(request)
+        if (binding === null || binding.accountId === null || account === null || account.id !== binding.accountId) {
+          return json({ error: 'unauthorized' }, 401)
+        }
         const data: SocketData = { seat: binding.seat, room: binding.room, link: null }
         if (server.upgrade(request, { data })) return undefined
         return json({ error: 'upgrade_failed' }, 400)
       }
+
+      if (url.pathname.startsWith('/auth/')) return auth.handle(request)
 
       if (readOnly && url.pathname === '/') return new Response(renderShell(), { headers: SHELL_HEADERS })
 
@@ -67,13 +73,17 @@ export function createGameServer(config: AppConfig, isReady: Readiness, rooms: R
         }
       }
 
-      if (readOnly && url.pathname === '/dev/join') {
+      if (request.method === 'POST' && url.pathname === '/dev/join') {
         const address = server.requestIP(request)?.address ?? ''
         if (config.env === 'production' || !LOOPBACK.has(address)) return json({ error: 'not_found' }, 404)
+        if (!originAllowed(request, url)) return json({ error: 'forbidden_origin' }, 403)
+        const account = auth.authenticate(request)
+        if (account === null) return json({ error: 'unauthorized' }, 401)
         const name = url.searchParams.get('room') ?? 'dev'
-        const seat = url.searchParams.get('seat')
-        if (!NAME_PATTERN.test(name) || (seat !== '0' && seat !== '1')) return json({ error: 'bad_request' }, 400)
-        return json({ token: rooms.joinNamed(name, seat === '0' ? 0 : 1, devMatchSetup) }, 200)
+        if (!NAME_PATTERN.test(name)) return json({ error: 'bad_request' }, 400)
+        const joined = rooms.joinNamed(name, account.id, devMatchSetup)
+        if (joined === null) return json({ error: 'room_full' }, 409)
+        return json({ seat: joined.seat, token: joined.token }, 200)
       }
 
       return handleRequest(request, config, isReady)

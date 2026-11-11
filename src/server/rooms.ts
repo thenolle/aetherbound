@@ -4,18 +4,30 @@ import type { PlayerIndex } from '../rules/types'
 import { DEFAULT_ROOM_OPTIONS, Room } from './room'
 import type { RoomOptions } from './room'
 
-export type SeatBinding = Readonly<{ room: Room, seat: PlayerIndex }>
+export type SeatBinding = { room: Room, seat: PlayerIndex, accountId: string | null }
 
 export type OpenRoom = Readonly<{ room: Room, tokens: readonly [string, string] }>
+
+export type JoinResult = Readonly<{ seat: PlayerIndex, token: string }>
+
+type NamedRoom = { open: OpenRoom, owners: [string | null, string | null] }
 
 function randomToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32))
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
+function pickSeat(owners: readonly [string | null, string | null], accountId: string): PlayerIndex | null {
+  if (owners[0] === accountId) return 0
+  if (owners[1] === accountId) return 1
+  if (owners[0] === null) return 0
+  if (owners[1] === null) return 1
+  return null
+}
+
 export class RoomRegistry {
   private readonly bindings = new Map<string, SeatBinding>()
-  private readonly named = new Map<string, OpenRoom>()
+  private readonly named = new Map<string, NamedRoom>()
   private readonly all = new Set<OpenRoom>()
   private readonly recorder: MatchRecorder | null
 
@@ -27,24 +39,30 @@ export class RoomRegistry {
     const persistence = this.recorder === null ? null : { matchId: crypto.randomUUID(), recorder: this.recorder }
     const room = new Room(setup, options, persistence)
     const entry: OpenRoom = { room, tokens: [randomToken(), randomToken()] }
-    this.bindings.set(entry.tokens[0], { room, seat: 0 })
-    this.bindings.set(entry.tokens[1], { room, seat: 1 })
+    this.bindings.set(entry.tokens[0], { room, seat: 0, accountId: null })
+    this.bindings.set(entry.tokens[1], { room, seat: 1, accountId: null })
     this.all.add(entry)
     return entry
   }
 
-  lookup(token: string): SeatBinding | null {
+  lookup(token: string): Readonly<SeatBinding> | null {
     return this.bindings.get(token) ?? null
   }
 
-  joinNamed(name: string, seat: PlayerIndex, makeSetup: () => MatchSetup, options: RoomOptions = DEFAULT_ROOM_OPTIONS): string {
+  joinNamed(name: string, accountId: string, makeSetup: () => MatchSetup, options: RoomOptions = DEFAULT_ROOM_OPTIONS): JoinResult | null {
     let entry = this.named.get(name)
-    if (entry === undefined || entry.room.winner !== null) {
-      if (entry !== undefined) this.release(entry)
-      entry = this.open(makeSetup(), options)
+    if (entry === undefined || entry.open.room.winner !== null) {
+      if (entry !== undefined) this.release(entry.open)
+      entry = { open: this.open(makeSetup(), options), owners: [null, null] }
       this.named.set(name, entry)
     }
-    return entry.tokens[seat]
+    const seat = pickSeat(entry.owners, accountId)
+    if (seat === null) return null
+    entry.owners[seat] = accountId
+    const token = entry.open.tokens[seat]
+    const binding = this.bindings.get(token)
+    if (binding !== undefined) binding.accountId = accountId
+    return { seat, token }
   }
 
   closeAll(): void {

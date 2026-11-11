@@ -8,6 +8,9 @@ export type AppConfig = Readonly<{
   region: string
   logLevel: LogLevel
   databasePath: string
+  publicOrigin: string
+  googleClientId: string | null
+  googleClientSecret: string | null
 }>
 
 export class ConfigError extends Error {
@@ -31,6 +34,17 @@ function pick<T extends string>(raw: string | undefined, allowed: readonly T[], 
   return match ?? fallback
 }
 
+const blank = (value: string | undefined): string | null => (value === undefined || value === '' ? null : value)
+
+function isOrigin(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return (url.protocol === 'http:' || url.protocol === 'https:') && url.origin === value
+  } catch {
+    return false
+  }
+}
+
 export function loadConfig(env: Readonly<Record<string, string | undefined>>): AppConfig {
   const issues: string[] = []
   const appEnv = pick(env.APP_ENV, APP_ENVS, 'development', 'APP_ENV', issues)
@@ -47,9 +61,30 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): A
     issues.push(`REGION must match ${REGION_PATTERN} (got "${region}")`)
   }
 
+  const explicitOrigin = blank(env.PUBLIC_ORIGIN)
+  if (explicitOrigin !== null && !isOrigin(explicitOrigin)) {
+    issues.push(`PUBLIC_ORIGIN must be an http(s) origin without a path or trailing slash (got "${explicitOrigin}")`)
+  }
+
+  const googleClientId = blank(env.GOOGLE_CLIENT_ID)
+  const googleClientSecret = blank(env.GOOGLE_CLIENT_SECRET)
+  if ((googleClientId === null) !== (googleClientSecret === null)) {
+    issues.push('GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together')
+  }
+
   const host = env.HOST === undefined || env.HOST === '' ? '0.0.0.0' : env.HOST
   const databasePath = env.DATABASE_PATH === undefined || env.DATABASE_PATH === '' ? 'data/aetherbound.db' : env.DATABASE_PATH
 
   if (issues.length > 0) throw new ConfigError(issues)
-  return { env: appEnv, host, port, region, logLevel, databasePath }
+  return {
+    env: appEnv,
+    host,
+    port,
+    region,
+    logLevel,
+    databasePath,
+    publicOrigin: explicitOrigin ?? `http://localhost:${port}`,
+    googleClientId,
+    googleClientSecret
+  }
 }

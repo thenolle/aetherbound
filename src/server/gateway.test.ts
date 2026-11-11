@@ -1,19 +1,14 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { afterAll, describe, expect, test } from 'bun:test'
 import { encodeCommandFrame } from '../protocol/commands'
 import { decodeServerFrame } from '../protocol/server'
 import type { ServerMessage } from '../protocol/server'
+import { SqliteAccountStore } from '../persistence/account-store'
+import { migrate, openDatabase } from '../persistence/database'
+import { MIGRATIONS } from '../persistence/migrations'
 import { loadConfig } from '../shared/config'
+import { Auth } from './auth'
 import { createGameServer } from './gateway'
 import { RoomRegistry } from './rooms'
-
-const toOwnedBytes = (value: ArrayBuffer | ArrayBufferView): Uint8Array<ArrayBuffer> => {
-  const source = value instanceof ArrayBuffer
-    ? new Uint8Array(value)
-    : new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
-  const copy = new Uint8Array(new ArrayBuffer(source.byteLength))
-  copy.set(source)
-  return copy
-}
 
 class Inbox {
   private readonly queue: ServerMessage[] = []
@@ -22,8 +17,8 @@ class Inbox {
   constructor(socket: WebSocket) {
     socket.binaryType = 'arraybuffer'
     socket.addEventListener('message', (event) => {
-      const payload = toOwnedBytes(event.data as ArrayBuffer | ArrayBufferView)
-      this.queue.push(decodeServerFrame(payload).message)
+      const bytes = new Uint8Array(event.data as ArrayBuffer)
+      this.queue.push(decodeServerFrame(bytes).message)
       this.wake?.()
     })
   }
@@ -52,18 +47,37 @@ const opened = (socket: WebSocket): Promise<void> =>
     socket.addEventListener('error', () => reject(new Error('websocket error')), { once: true })
   })
 
+function openSocket(address: string, cookie: string): WebSocket {
+  const options = { headers: { cookie } }
+  return new WebSocket(address, options as unknown as string[])
+}
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength)
+  new Uint8Array(buffer).set(bytes)
+  return buffer
+}
+
+const db = openDatabase(':memory:')
+migrate(db, MIGRATIONS)
+const accounts = new SqliteAccountStore(db, () => Date.now())
+const auth = new Auth({ google: null, accounts, publicOrigin: 'http://localhost:8080' })
+
+function signIn(sub: string): string {
+  const account = accounts.upsertGoogleAccount(sub, `Player ${sub}`)
+  return `aetherbound_session=${accounts.createSession(account.id, null, 3_600_000).token}`
+}
+
 describe('game server', () => {
   const rooms = new RoomRegistry()
-  const server = createGameServer(loadConfig({ APP_ENV: 'test', PORT: '0', HOST: '127.0.0.1' }), () => true, rooms)
+  const server = createGameServer(loadConfig({ APP_ENV: 'test', PORT: '0', HOST: '127.0.0.1' }), () => true, rooms, auth)
   const url = (path: string): URL => new URL(path, server.url)
+  const join = (room: string, cookie?: string): Promise<Response> =>
+    fetch(url(`/dev/join?room=${room}`), { method: 'POST', headers: cookie === undefined ? {} : { cookie } })
 
   afterAll(async () => {
     rooms.closeAll()
     await server.stop(true)
-  })
-
-  beforeAll(() => {
-    expect(server.port).toBeGreaterThan(0)
   })
 
   test('serves the canvas shell, the client bundle and health', async () => {
@@ -81,51 +95,76 @@ describe('game server', () => {
     expect((await fetch(url('/healthz'))).status).toBe(200)
   }, 20000)
 
-  test('guards websocket upgrades and the dev endpoint', async () => {
-    expect((await fetch(url('/ws?token=nope'))).status).toBe(401)
-    const join = await fetch(url('/dev/join?room=guard&seat=0'))
-    expect(join.status).toBe(200)
-    const { token } = (await join.json()) as { token: string }
-    expect((await fetch(url(`/ws?token=${token}`), { headers: { origin: 'http://evil.example' } })).status).toBe(403)
-    expect((await fetch(url('/dev/join?room=Bad!&seat=0'))).status).toBe(400)
-    expect((await fetch(url('/dev/join?room=guard&seat=2'))).status).toBe(400)
+  test('seats are bound to signed-in accounts and the upgrade checks both token and session', async () => {
+    const alice = signIn('alice')
+    const bob = signIn('bob')
+    const carol = signIn('carol')
 
-    const production = createGameServer(loadConfig({ APP_ENV: 'production', PORT: '0', HOST: '127.0.0.1' }), () => true, new RoomRegistry())
-    expect((await fetch(new URL('/dev/join?room=a&seat=0', production.url))).status).toBe(404)
+    expect((await join('guard')).status).toBe(401)
+    expect((await fetch(url('/dev/join?room=guard'))).status).toBe(404)
+    expect((await join('Bad!', alice)).status).toBe(400)
+
+    const first = (await (await join('guard', alice)).json()) as { seat: number, token: string }
+    const again = (await (await join('guard', alice)).json()) as { seat: number, token: string }
+    const second = (await (await join('guard', bob)).json()) as { seat: number, token: string }
+    expect(first.seat).toBe(0)
+    expect(again).toEqual(first)
+    expect(second.seat).toBe(1)
+    expect((await join('guard', carol)).status).toBe(409)
+
+    expect((await fetch(url('/ws?token=nope'), { headers: { cookie: alice } })).status).toBe(401)
+    expect((await fetch(url(`/ws?token=${first.token}`))).status).toBe(401)
+    expect((await fetch(url(`/ws?token=${first.token}`), { headers: { cookie: bob } })).status).toBe(401)
+    expect((await fetch(url(`/ws?token=${first.token}`), { headers: { cookie: alice, origin: 'http://evil.example' } })).status).toBe(403)
+
+    expect((await fetch(url('/auth/me'))).status).toBe(401)
+    expect(await (await fetch(url('/auth/me'), { headers: { cookie: alice } })).json()).toMatchObject({ displayName: 'Player alice' })
+    expect((await fetch(url('/auth/google/start'))).status).toBe(503)
+
+    const production = createGameServer(
+      loadConfig({ APP_ENV: 'production', PORT: '0', HOST: '127.0.0.1' }),
+      () => true,
+      new RoomRegistry(),
+      auth
+    )
+    const blocked = await fetch(new URL('/dev/join?room=a', production.url), { method: 'POST', headers: { cookie: alice } })
+    expect(blocked.status).toBe(404)
     await production.stop(true)
   })
 
-  test('two clients play a turn end to end', async () => {
-    const tokens: string[] = []
-    for (const seat of [0, 1]) {
-      const response = await fetch(url(`/dev/join?room=e2e&seat=${seat}`))
-      tokens.push(((await response.json()) as { token: string }).token)
-    }
-    const wsUrl = (token: string): string => `ws://127.0.0.1:${server.port}/ws?token=${token}`
-    const socket0 = new WebSocket(wsUrl(tokens[0] ?? ''))
-    const inbox0 = new Inbox(socket0)
-    const socket1 = new WebSocket(wsUrl(tokens[1] ?? ''))
-    const inbox1 = new Inbox(socket1)
-    await Promise.all([opened(socket0), opened(socket1)])
+  test('two signed-in players play a turn end to end', async () => {
+    const alice = signIn('alice-e2e')
+    const bob = signIn('bob-e2e')
+    const seatA = (await (await join('e2e', alice)).json()) as { seat: number, token: string }
+    const seatB = (await (await join('e2e', bob)).json()) as { seat: number, token: string }
+    const address = (token: string): string => `ws://127.0.0.1:${server.port}/ws?token=${token}`
 
-    const first0 = await inbox0.next('snapshot')
-    const first1 = await inbox1.next('snapshot')
-    expect(first0.view.viewer).toBe(0)
-    expect(first1.view.viewer).toBe(1)
-    expect(first0.view.self.hand).toHaveLength(4)
+    const socketA = openSocket(address(seatA.token), alice)
+    const inboxA = new Inbox(socketA)
+    const socketB = openSocket(address(seatB.token), bob)
+    const inboxB = new Inbox(socketB)
+    await Promise.all([opened(socketA), opened(socketB)])
 
-    socket0.send(toOwnedBytes(encodeCommandFrame(0, 'turn-1', { type: 'end_turn' })))
-    expect(await inbox0.next('accepted')).toMatchObject({ commandSequence: 0, duplicate: false })
-    const events = await inbox1.next('events')
+    const firstA = await inboxA.next('snapshot')
+    const firstB = await inboxB.next('snapshot')
+    expect(firstA.view.viewer).toBe(0)
+    expect(firstB.view.viewer).toBe(1)
+    expect(firstA.view.self.hand).toHaveLength(4)
+
+    const packetA = encodeCommandFrame(0, 'turn-1', { type: 'end_turn' })
+    socketA.send(toArrayBuffer(packetA))
+    expect(await inboxA.next('accepted')).toMatchObject({ commandSequence: 0, duplicate: false })
+    const events = await inboxB.next('events')
     expect(events.events.some((item) => item.event.type === 'turn_started')).toBe(true)
-    const after = await inbox1.next('snapshot')
+    const after = await inboxB.next('snapshot')
     expect(after.view.active).toBe(1)
     expect(after.view.self.hand).toHaveLength(5)
 
-    socket0.send(toOwnedBytes(encodeCommandFrame(1, 'turn-2', { type: 'end_turn' })))
-    expect(await inbox0.next('rejected')).toMatchObject({ commandSequence: 1, code: 'not_your_turn' })
+    const packetB = encodeCommandFrame(1, 'turn-2', { type: 'end_turn' })
+    socketA.send(toArrayBuffer(packetB))
+    expect(await inboxA.next('rejected')).toMatchObject({ commandSequence: 1, code: 'not_your_turn' })
 
-    socket0.close()
-    socket1.close()
+    socketA.close()
+    socketB.close()
   }, 20000)
 })
