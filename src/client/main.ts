@@ -19,11 +19,12 @@ import { BRIARTHORN_CARDS, BRIARTHORN_HERO } from '../content/briarthorn'
 import { EXCHEQUER_CARDS, EXCHEQUER_HERO } from '../content/exchequer'
 import { CHOIR_CARDS, CHOIR_HERO } from '../content/choir'
 import { CINDER_VANE_CARDS, CINDER_VANE_HERO } from '../content/cinder-vane'
+import { BRASSWRIGHT_CARDS, BRASSWRIGHT_HERO } from '../content/brasswright'
 import { DeckBuilder } from './decks'
 import { A11yBridge } from './a11y'
 import { CollectionScreen } from './collection'
 
-const registry = createRegistry([...EXCHEQUER_CARDS, ...BRINE_LOCK_CARDS, ...BRIARTHORN_CARDS, ...CHOIR_CARDS, ...CINDER_VANE_CARDS])
+const registry = createRegistry([...EXCHEQUER_CARDS, ...BRINE_LOCK_CARDS, ...BRIARTHORN_CARDS, ...CHOIR_CARDS, ...CINDER_VANE_CARDS, ...BRASSWRIGHT_CARDS])
 const NOTE_LIMIT = 8
 const POLL_MS = 1500
 const HANDLED_KEYS = new Set(['ArrowLeft', 'ArrowRight'])
@@ -297,7 +298,7 @@ async function start(): Promise<void> {
     const deckBuilder = new DeckBuilder({
       api,
       registry,
-      heroes: [EXCHEQUER_HERO, BRINE_LOCK_HERO, BRIARTHORN_HERO, CHOIR_HERO, CINDER_VANE_HERO],
+      heroes: [EXCHEQUER_HERO, BRINE_LOCK_HERO, BRIARTHORN_HERO, CHOIR_HERO, CINDER_VANE_HERO, BRASSWRIGHT_HERO],
       onChange: render,
       onBack: toMenu
     })
