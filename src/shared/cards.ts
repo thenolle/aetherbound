@@ -3,7 +3,7 @@ import type { Id } from './ids'
 import { GAME_LIMITS } from './lexicon'
 import type { CardFamilyId, FactionId, KeywordId, LocalizedName, RarityId } from './lexicon'
 import { MAX_EFFECTS_PER_CARD, SNARE_TRIGGERS, needsChosenTarget } from './effects'
-import type { Effect, SnareTrigger, SummonEffect } from './effects'
+import type { Effect, SnareTrigger, TokenEffect } from './effects'
 
 export type CardFaction = FactionId | 'neutral'
 
@@ -52,11 +52,11 @@ function checkEffects(effects: readonly Effect[], fail: Fail): void {
     } else if (effect.kind === 'blight') {
       if (effect.target !== 'chosen-enemy-minion' && effect.target !== 'all-enemy-minions') fail('blight needs an enemy minion target')
       if (!Number.isInteger(effect.amount) || effect.amount < 1 || effect.amount > 5) fail('blight amount must be 1 to 5')
-    } else if (effect.kind === 'summon') {
+    } else if (effect.kind === 'summon' || effect.kind === 'raise') {
       if (!Number.isInteger(effect.count) || effect.count < 1 || effect.count > GAME_LIMITS.boardSlots) fail('summon count must be 1 to 7')
       if (!Number.isInteger(effect.attack) || effect.attack < 0 || effect.attack > 99) fail('summoned attack must be 0 to 99')
       if (!Number.isInteger(effect.health) || effect.health < 1 || effect.health > 99) fail('summoned health must be 1 to 99')
-    } else if (!Number.isInteger(effect.amount) || effect.amount < 1 || effect.amount > 99) {
+    } else if ('amount' in effect && (!Number.isInteger(effect.amount) || effect.amount < 1 || effect.amount > 99)) {
       fail('effect amount must be 1 to 99')
     }
   }
@@ -112,8 +112,10 @@ export function assertHeroDefinition(hero: HeroDefinition): void {
   checkEffects(hero.ability.effects, fail)
 }
 
-export function summonsOf(card: CardDefinition): SummonEffect[] {
-  return [...(card.effects ?? []), ...(card.onPlay ?? []), ...(card.onDeath ?? [])].filter((effect): effect is SummonEffect => effect.kind === 'summon')
+export function summonsOf(card: CardDefinition): TokenEffect[] {
+  return [...(card.effects ?? []), ...(card.onPlay ?? []), ...(card.onDeath ?? [])].filter(
+    (effect): effect is TokenEffect => effect.kind === 'summon' || effect.kind === 'raise'
+  )
 }
 
 export function createRegistry(cards: readonly CardDefinition[]): CardRegistry {

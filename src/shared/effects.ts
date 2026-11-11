@@ -6,11 +6,12 @@ export type Effect =
   | Readonly<{ kind: 'damage' | 'heal', amount: number, target: EffectTarget }>
   | Readonly<{ kind: 'freeze', target: EffectTarget }>
   | Readonly<{ kind: 'blight', amount: number, target: EffectTarget }>
-  | Readonly<{ kind: 'summon', cardId: Id<'card'>, attack: number, health: number, count: number }>
+  | Readonly<{ kind: 'summon' | 'raise', cardId: Id<'card'>, attack: number, health: number, count: number }>
+  | Readonly<{ kind: 'drain', amount: number }>
   | Readonly<{ kind: 'draw', count: number }>
   | Readonly<{ kind: 'tariff', amount: number }>
 
-export type SummonEffect = Extract<Effect, { kind: 'summon' }>
+export type TokenEffect = Extract<Effect, { kind: 'summon' | 'raise' }>
 
 export const MAX_EFFECTS_PER_CARD = 8
 

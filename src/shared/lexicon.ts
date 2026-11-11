@@ -25,7 +25,6 @@ export const FACTION_IDS = [
   'glass-eye',
   'lantern-bearers'
 ] as const
-
 export type FactionId = typeof FACTION_IDS[number]
 
 export type FactionDefinition = Readonly<{
@@ -99,12 +98,13 @@ export const RARITIES: Readonly<Record<RarityId, LocalizedName>> = {
   legendary: { en: 'Legendary', fr: 'Legendaire' }
 }
 
-export const KEYWORD_IDS = ['shield-wall', 'haste'] as const
+export const KEYWORD_IDS = ['shield-wall', 'haste', 'echo'] as const
 export type KeywordId = typeof KEYWORD_IDS[number]
 
 export const KEYWORDS: Readonly<Record<KeywordId, LocalizedName>> = {
   'shield-wall': { en: 'Shield-Wall', fr: 'Mur de Boucliers' },
-  haste: { en: 'Haste', fr: 'Hate' }
+  haste: { en: 'Haste', fr: 'Hate' },
+  echo: { en: 'Echo', fr: 'Echo' },
 }
 
 export const BOARD_IDS = [

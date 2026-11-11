@@ -56,6 +56,7 @@ export type PlayerState = {
   aether: number
   tariff: number
   fatigue: number
+  fallen: number
   weapon: Weapon | null
   holdings: Holding[]
   snares: Snare[]

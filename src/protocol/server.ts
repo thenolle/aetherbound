@@ -189,6 +189,17 @@ function writeEffect(w: ByteWriter, effect: Effect): void {
       w.u8(2)
       w.varuint(effect.count)
       return
+    case 'drain':
+      w.u8(7)
+      w.varuint(effect.amount)
+      return
+    case 'raise':
+      w.u8(8)
+      writeId(w, effect.cardId)
+      w.varuint(effect.attack)
+      w.varuint(effect.health)
+      w.varuint(effect.count)
+      return
     case 'tariff':
       w.u8(3)
       w.varuint(effect.amount)
@@ -218,6 +229,8 @@ function readEffect(r: ByteReader): Effect {
     if (target === undefined) throw malformed('invalid effect target')
     return { kind: 'blight', amount, target }
   }
+  if (kind === 7) return { kind: 'drain', amount: r.varuint() }
+  if (kind === 8) return { kind: 'raise', cardId: readId(r, 'card'), attack: r.varuint(), health: r.varuint(), count: r.varuint() }
   throw malformed('invalid effect kind')
 }
 
@@ -341,6 +354,7 @@ function writeSide(w: ByteWriter, side: SharedSide): void {
   w.varuint(side.aether)
   w.varuint(side.tariff)
   w.varuint(side.fatigue)
+  w.varuint(side.fallen)
   writeWeapon(w, side.weapon)
   writeList(w, side.holdings, (holding) => writeHolding(w, holding))
   writeList(w, side.oaths, (oath) => writeOath(w, oath))
@@ -360,6 +374,7 @@ function readSide(r: ByteReader): SharedSide {
   const aether = r.varuint()
   const tariff = r.varuint()
   const fatigue = r.varuint()
+  const fallen = r.varuint()
   const weapon = readWeapon(r)
   const holdings = readList(r, () => readHolding(r))
   const oaths = readList(r, () => readOath(r))
@@ -377,6 +392,7 @@ function readSide(r: ByteReader): SharedSide {
     aether,
     tariff,
     fatigue,
+    fallen,
     weapon,
     holdings,
     oaths,

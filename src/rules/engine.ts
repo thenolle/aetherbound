@@ -2,7 +2,7 @@ import { assertHeroDefinition } from '../shared/cards'
 import type { CardRegistry, HeroDefinition } from '../shared/cards'
 import { validateDeck } from '../shared/deck'
 import { needsChosenTarget } from '../shared/effects'
-import type { Effect, SnareTrigger } from '../shared/effects'
+import type { Effect, SnareTrigger, TokenEffect } from '../shared/effects'
 import { DomainError } from '../shared/errors'
 import type { Id } from '../shared/ids'
 import { GAME_LIMITS } from '../shared/lexicon'
@@ -98,6 +98,25 @@ function passTurn(state: MatchState, events: GameEvent[]): void {
   startTurn(state, events)
 }
 
+function placeToken(state: MatchState, caster: PlayerIndex, token: TokenEffect, events: GameEvent[]): boolean {
+  const side = state.players[caster]
+  if (side.board.length >= GAME_LIMITS.boardSlots) return false
+  const minion: Minion = {
+    uid: state.nextUid,
+    cardId: token.cardId,
+    attack: token.attack,
+    health: token.health,
+    maxHealth: token.health,
+    exhausted: true,
+    keywords: [],
+    onDeath: []
+  }
+  state.nextUid += 1
+  side.board.push(minion)
+  events.push({ type: 'minion_summoned', player: caster, uid: minion.uid, cardId: token.cardId })
+  return true
+}
+
 function applyEffect(state: MatchState, caster: PlayerIndex, effect: Effect, chosen: Minion | undefined, events: GameEvent[]): void {
   const foe = other(caster)
   if (effect.kind === 'draw') {
@@ -135,24 +154,25 @@ function applyEffect(state: MatchState, caster: PlayerIndex, effect: Effect, cho
     return
   }
   if (effect.kind === 'summon') {
-    const side = state.players[caster]
-    for (let count = 0; count < effect.count && side.board.length < GAME_LIMITS.boardSlots; count += 1) {
-      const minion: Minion = {
-        uid: state.nextUid,
-        cardId: effect.cardId,
-        attack: effect.attack,
-        health: effect.health,
-        maxHealth: effect.health,
-        exhausted: true,
-        keywords: [],
-        onDeath: []
-      }
-      state.nextUid += 1
-      side.board.push(minion)
-      events.push({ type: 'minion_summoned', player: caster, uid: minion.uid, cardId: effect.cardId })
+    for (let count = 0; count < effect.count; count += 1) {
+      if (!placeToken(state, caster, effect, events)) break
     }
     return
   }
+  if (effect.kind === 'raise') {
+    const side = state.players[caster]
+    for (let count = 0; count < effect.count && side.fallen > 0; count += 1) {
+      if (!placeToken(state, caster, effect, events)) break
+      side.fallen -= 1
+    }
+    return
+  }
+  if (effect.kind === 'drain') {
+    damageHero(state, foe, effect.amount, events)
+    if (state.winner === null) healHero(state, caster, effect.amount, events)
+    return
+  }
+  if (effect.kind !== 'damage' && effect.kind !== 'heal') return
   const amount = effect.amount
   const harmful = effect.kind === 'damage'
   const affectHero = (player: PlayerIndex): void => {
@@ -210,6 +230,7 @@ function settleBoards(state: MatchState, events: GameEvent[]): void {
       side.board = survivors
     }
     if (dead.length === 0) return
+    for (const { owner } of dead) state.players[owner].fallen += 1
     for (const owner of PLAYERS) {
       for (const minion of state.players[owner].board) {
         const grows = minion.grows
@@ -220,7 +241,10 @@ function settleBoards(state: MatchState, events: GameEvent[]): void {
         events.push({ type: 'grew', player: owner, uid: minion.uid, attack: minion.attack, health: minion.health })
       }
     }
-    for (const { owner, minion } of dead) runEffects(state, owner, minion.onDeath, undefined, events)
+    for (const { owner, minion } of dead) {
+      const times = minion.keywords.includes('echo') ? 2 : 1
+      for (let pass = 0; pass < times; pass += 1) runEffects(state, owner, minion.onDeath, undefined, events)
+    }
   }
   throw new DomainError('internal', 'board did not settle')
 }
@@ -501,6 +525,7 @@ export function createMatch(setup: MatchSetup): StepResult {
       heroAttacked: false,
       ability: { cost: entry.hero.ability.cost, effects: [...entry.hero.ability.effects] },
       abilityUsed: false,
+      fallen: 0,
       deck: rng.shuffle(entry.deck),
       hand: [],
       board: []

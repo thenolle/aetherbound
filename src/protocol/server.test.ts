@@ -56,6 +56,8 @@ function richState() {
   const state = createMatch(fixtureSetup(3)).state
   state.players[0].weapon = { cardId: cid(1), attack: 2, durability: 1 }
   state.players[0].tariff = 1
+  state.players[0].fallen = 3
+  state.players[1].fallen = 1
   state.players[0].board = [{
     uid: 1,
     cardId: cid(2),
@@ -63,7 +65,7 @@ function richState() {
     health: 1,
     maxHealth: 2,
     exhausted: true,
-    keywords: ['shield-wall', 'haste'],
+    keywords: ['shield-wall', 'haste', 'echo'],
     blight: 2,
     grows: { attack: 1, health: 2 },
     onDeath: [
@@ -74,6 +76,8 @@ function richState() {
       { kind: 'freeze', target: 'all-enemy-minions' },
       { kind: 'summon', cardId: cid(9), attack: 1, health: 1, count: 2 },
       { kind: 'blight', amount: 2, target: 'chosen-enemy-minion' },
+      { kind: 'drain', amount: 2 },
+      { kind: 'raise', cardId: cid(9), attack: 2, health: 1, count: 2 },
     ]
   }]
   state.players[1].board = [{ uid: 2, cardId: cid(3), attack: 3, health: 3, maxHealth: 3, exhausted: false, keywords: [], onDeath: [] }]

@@ -89,7 +89,7 @@ export function buildHud(input: HudInput): HudLine[] {
 
   const foe = view.opponent
   add('-- opponent --', 'dim')
-  add(`hp ${foe.heroHealth}/${foe.heroMaxHealth}  aether ${foe.aether}/${foe.aetherMax}  hand ${foe.handCount}  deck ${foe.deckCount}  tariff ${foe.tariff}`)
+  add(`hp ${foe.heroHealth}/${foe.heroMaxHealth}  aether ${foe.aether}/${foe.aetherMax}  hand ${foe.handCount}  deck ${foe.deckCount}  tariff ${foe.tariff}  fallen ${foe.fallen}`)
   if (foe.weapon !== null) add(`iron: ${nameOf(registry, foe.weapon.cardId)} ${foe.weapon.attack}/${foe.weapon.durability}`)
   add(`board: ${foe.board.map((minion) => minionText(minion, registry)).join('  ') || '(empty)'}`)
   add(`holdings: ${foe.holdings.map((holding) => holdingText(holding, registry)).join('  ') || '(none)'}`)
