@@ -1,3 +1,4 @@
+import type { MatchRecorder } from '../persistence/match-store'
 import type { MatchSetup } from '../rules/engine'
 import type { PlayerIndex } from '../rules/types'
 import { DEFAULT_ROOM_OPTIONS, Room } from './room'
@@ -15,14 +16,20 @@ function randomToken(): string {
 export class RoomRegistry {
   private readonly bindings = new Map<string, SeatBinding>()
   private readonly named = new Map<string, OpenRoom>()
-  private readonly open_ = new Set<OpenRoom>()
+  private readonly all = new Set<OpenRoom>()
+  private readonly recorder: MatchRecorder | null
+
+  constructor(recorder: MatchRecorder | null = null) {
+    this.recorder = recorder
+  }
 
   open(setup: MatchSetup, options: RoomOptions = DEFAULT_ROOM_OPTIONS): OpenRoom {
-    const room = new Room(setup, options)
+    const persistence = this.recorder === null ? null : { matchId: crypto.randomUUID(), recorder: this.recorder }
+    const room = new Room(setup, options, persistence)
     const entry: OpenRoom = { room, tokens: [randomToken(), randomToken()] }
     this.bindings.set(entry.tokens[0], { room, seat: 0 })
     this.bindings.set(entry.tokens[1], { room, seat: 1 })
-    this.open_.add(entry)
+    this.all.add(entry)
     return entry
   }
 
@@ -41,7 +48,7 @@ export class RoomRegistry {
   }
 
   closeAll(): void {
-    for (const entry of [...this.open_]) this.release(entry)
+    for (const entry of [...this.all]) this.release(entry)
     this.named.clear()
   }
 
@@ -49,6 +56,6 @@ export class RoomRegistry {
     entry.room.dispose()
     this.bindings.delete(entry.tokens[0])
     this.bindings.delete(entry.tokens[1])
-    this.open_.delete(entry)
+    this.all.delete(entry)
   }
 }

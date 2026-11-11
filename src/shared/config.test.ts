@@ -3,7 +3,14 @@ import { ConfigError, loadConfig } from './config'
 
 describe('loadConfig', () => {
   test('applies defaults', () => {
-    expect(loadConfig({})).toEqual({ env: 'development', host: '0.0.0.0', port: 8080, region: 'local', logLevel: 'info' })
+    expect(loadConfig({})).toEqual({
+      env: 'development',
+      host: '0.0.0.0',
+      port: 8080,
+      region: 'local',
+      logLevel: 'info',
+      databasePath: 'data/aetherbound.db'
+    })
   })
 
   test('reads valid values', () => {

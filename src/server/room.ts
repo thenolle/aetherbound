@@ -2,6 +2,8 @@ import { decodeCommandFrame } from '../protocol/commands'
 import { ProtocolError } from '../protocol/errors'
 import { MAX_EVENTS_PER_MESSAGE, encodeServerFrame } from '../protocol/server'
 import type { ServerMessage } from '../protocol/server'
+import { describeMatch } from '../persistence/match-store'
+import type { MatchRecorder } from '../persistence/match-store'
 import { RULES } from '../rules/constants'
 import type { MatchSetup } from '../rules/engine'
 import { MatchSession } from '../rules/session'
@@ -22,6 +24,8 @@ export type RoomOptions = Readonly<{
   schedule: (run: () => void, ms: number) => () => void
 }>
 
+export type RoomPersistence = Readonly<{ matchId: string, recorder: MatchRecorder }>
+
 export const DEFAULT_ROOM_OPTIONS: RoomOptions = {
   turnMs: RULES.turnSeconds * 1000,
   burst: 20,
@@ -38,17 +42,24 @@ const SEATS = [0, 1] as const
 export class Room {
   private readonly session: MatchSession
   private readonly options: RoomOptions
+  private readonly persistence: RoomPersistence | null
   private readonly links: [SeatLink | null, SeatLink | null] = [null, null]
   private readonly delivered: [number, number] = [0, 0]
   private readonly outbound: [number, number] = [0, 0]
   private readonly inbound: [number, number] = [-1, -1]
   private readonly buckets: [TokenBucket, TokenBucket]
   private cancelTimer: (() => void) | null = null
+  private persisted = 0
+  private failed = false
 
-  constructor(setup: MatchSetup, options: RoomOptions = DEFAULT_ROOM_OPTIONS) {
+  constructor(setup: MatchSetup, options: RoomOptions = DEFAULT_ROOM_OPTIONS, persistence: RoomPersistence | null = null) {
     this.session = new MatchSession(setup)
     this.options = options
+    this.persistence = persistence
     this.buckets = [this.newBucket(), this.newBucket()]
+    if (persistence !== null) {
+      persistence.recorder.begin(describeMatch(persistence.matchId, setup, options.now()))
+    }
   }
 
   get winner(): PlayerIndex | null {
@@ -56,6 +67,10 @@ export class Room {
   }
 
   attach(seat: PlayerIndex, link: SeatLink): void {
+    if (this.failed) {
+      link.close(1011, 'room unavailable')
+      return
+    }
     const previous = this.links[seat]
     this.links[seat] = link
     this.inbound[seat] = -1
@@ -71,7 +86,7 @@ export class Room {
   }
 
   handleFrame(seat: PlayerIndex, link: SeatLink, data: Uint8Array): void {
-    if (this.links[seat] !== link) return
+    if (this.links[seat] !== link || this.failed) return
 
     let decoded
     try {
@@ -99,6 +114,11 @@ export class Room {
       this.reject(seat, decoded.sequence, result.code, result.message)
       return
     }
+    if (!result.duplicate && !this.persist()) {
+      this.reject(seat, decoded.sequence, 'internal', 'persistence failure')
+      this.abort()
+      return
+    }
     this.send(seat, { type: 'accepted', commandSequence: decoded.sequence, duplicate: result.duplicate, lastSeq: result.lastSeq })
     if (!result.duplicate) {
       this.broadcast()
@@ -116,6 +136,29 @@ export class Room {
 
   private newBucket(): TokenBucket {
     return new TokenBucket(this.options.burst, this.options.refillPerSecond, this.options.now)
+  }
+
+  private persist(): boolean {
+    const persistence = this.persistence
+    if (persistence === null) return true
+    try {
+      const fresh = this.session.inputsFrom(this.persisted)
+      if (fresh.length === 0) return true
+      const winner = this.session.winner
+      const outcome = winner === null ? null : { winner, endedAt: this.options.now() }
+      persistence.recorder.append(persistence.matchId, this.persisted, fresh, outcome)
+      this.persisted += fresh.length
+      return true
+    } catch (error) {
+      console.error('match persistence failed', error)
+      return false
+    }
+  }
+
+  private abort(): void {
+    this.failed = true
+    this.disarm()
+    for (const seat of SEATS) this.links[seat]?.close(1011, 'persistence failure')
   }
 
   private reject(seat: PlayerIndex, commandSequence: number, code: ErrorCode, message: string): void {
@@ -167,7 +210,13 @@ export class Room {
 
   private expire(): void {
     this.cancelTimer = null
-    if (this.session.timeout().ok) this.broadcast()
+    if (this.session.timeout().ok) {
+      if (!this.persist()) {
+        this.abort()
+        return
+      }
+      this.broadcast()
+    }
     this.arm()
   }
 }
