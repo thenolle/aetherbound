@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { isValidId } from './ids'
-import { BOARDS, BOARD_IDS, CARD_FAMILIES, CARD_FAMILY_IDS, FACTIONS, FACTION_IDS, GAME_LIMITS, LOCALES, RARITIES, RARITY_IDS, allLexiconNames, localize } from './lexicon'
+import { BOARDS, BOARD_IDS, CARD_FAMILIES, CARD_FAMILY_IDS, FACTIONS, FACTION_IDS, GAME_LIMITS, KEYWORDS, KEYWORD_IDS, LOCALES, RARITIES, RARITY_IDS, allLexiconNames, localize } from './lexicon'
 
 describe('lexicon', () => {
   test('launch counts match the design bible', () => {
@@ -22,6 +22,11 @@ describe('lexicon', () => {
     expect(Object.keys(BOARDS)).toEqual([...BOARD_IDS])
   })
 
+  test('keywords are registered with valid ids', () => {
+    expect(Object.keys(KEYWORDS)).toEqual([...KEYWORD_IDS])
+    for (const id of KEYWORD_IDS) expect(isValidId(id)).toBe(true)
+  })
+
   test('every name exists in every locale', () => {
     for (const name of allLexiconNames()) {
       for (const locale of LOCALES) expect(localize(name, locale).trim().length).toBeGreaterThan(0)
@@ -29,7 +34,7 @@ describe('lexicon', () => {
   })
 
   test('bible-given french names are exact', () => {
-    expect(FACTIONS.exchequer.name.fr).toBe("L'Échiquier de la Concorde")
+    expect(FACTIONS.exchequer.name.fr).toBe("L'Echiquier de la Concorde")
     expect(FACTIONS.brasswright.name.fr).toBe('La Guilde des Cuivriers')
   })
 })

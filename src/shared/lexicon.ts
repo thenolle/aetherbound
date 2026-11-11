@@ -12,7 +12,7 @@ export const GAME_LIMITS = {
 
 export const TITLE: LocalizedName = {
   en: 'Aetherbound: Shattered Concord',
-  fr: 'Aetherbound : La Concorde Brisée'
+  fr: 'Aetherbound : La Concorde Brisee'
 }
 
 export const FACTION_IDS = [
@@ -37,12 +37,12 @@ export type FactionDefinition = Readonly<{
 export const FACTIONS: Readonly<Record<FactionId, FactionDefinition>> = {
   exchequer: {
     id: 'exchequer',
-    name: { en: 'The Concord Exchequer', fr: "L'Échiquier de la Concorde" },
+    name: { en: 'The Concord Exchequer', fr: "L'Echiquier de la Concorde" },
     archetype: 'order, taxation, attrition'
   },
   'brine-lock': {
     id: 'brine-lock',
-    name: { en: 'The Brine-Lock Cartel', fr: 'Le Cartel des Écluses Salines' },
+    name: { en: 'The Brine-Lock Cartel', fr: 'Le Cartel des Ecluses Salines' },
     archetype: 'control, frost, displacement'
   },
   brasswright: {
@@ -62,7 +62,7 @@ export const FACTIONS: Readonly<Record<FactionId, FactionDefinition>> = {
   },
   'cinder-vane': {
     id: 'cinder-vane',
-    name: { en: 'The Cinder-Vane Legion', fr: 'La Légion Cendre-Vane' },
+    name: { en: 'The Cinder-Vane Legion', fr: 'La Legion Cendre-Vane' },
     archetype: 'aggression, venting, rush'
   },
   'glass-eye': {
@@ -81,11 +81,11 @@ export const CARD_FAMILY_IDS = ['bound', 'writ', 'iron', 'holding', 'snare', 'oa
 export type CardFamilyId = typeof CARD_FAMILY_IDS[number]
 
 export const CARD_FAMILIES: Readonly<Record<CardFamilyId, LocalizedName>> = {
-  bound: { en: 'Bound', fr: 'Liés' },
+  bound: { en: 'Bound', fr: 'Lies' },
   writ: { en: 'Writs', fr: 'Mandats' },
   iron: { en: 'Irons', fr: 'Fers' },
   holding: { en: 'Holdings', fr: 'Domaines' },
-  snare: { en: 'Snares', fr: 'Pièges' },
+  snare: { en: 'Snares', fr: 'Pieges' },
   oath: { en: 'Oaths', fr: 'Serments' }
 }
 
@@ -95,8 +95,16 @@ export type RarityId = typeof RARITY_IDS[number]
 export const RARITIES: Readonly<Record<RarityId, LocalizedName>> = {
   common: { en: 'Common', fr: 'Commune' },
   rare: { en: 'Rare', fr: 'Rare' },
-  epic: { en: 'Epic', fr: 'Épique' },
-  legendary: { en: 'Legendary', fr: 'Légendaire' }
+  epic: { en: 'Epic', fr: 'Epique' },
+  legendary: { en: 'Legendary', fr: 'Legendaire' }
+}
+
+export const KEYWORD_IDS = ['shield-wall', 'haste'] as const
+export type KeywordId = typeof KEYWORD_IDS[number]
+
+export const KEYWORDS: Readonly<Record<KeywordId, LocalizedName>> = {
+  'shield-wall': { en: 'Shield-Wall', fr: 'Mur de Boucliers' },
+  haste: { en: 'Haste', fr: 'Hate' }
 }
 
 export const BOARD_IDS = [
@@ -112,11 +120,11 @@ export type BoardId = typeof BOARD_IDS[number]
 
 export const BOARDS: Readonly<Record<BoardId, LocalizedName>> = {
   'high-manifold': { en: 'The High Manifold', fr: 'Le Haut Collecteur' },
-  'low-tide-drydock': { en: 'Low-Tide Drydock', fr: 'Cale Sèche de Marée Basse' },
+  'low-tide-drydock': { en: 'Low-Tide Drydock', fr: 'Cale Seche de Maree Basse' },
   'valve-foundry': { en: 'The Valve-Foundry', fr: 'La Fonderie des Vannes' },
   'saint-sorrows-ossuary': { en: "Saint-Sorrow's Ossuary", fr: 'Ossuaire de Saint-Chagrin' },
   'sunken-cistern': { en: 'The Sunken Cistern', fr: 'La Citerne Engloutie' },
-  'ruptured-trench': { en: 'The Ruptured Trench', fr: 'La Tranchée Rompue' }
+  'ruptured-trench': { en: 'The Ruptured Trench', fr: 'La Tranchee Rompue' }
 }
 
 export function localize(name: LocalizedName, locale: Locale): string {
@@ -129,6 +137,7 @@ export function allLexiconNames(): readonly LocalizedName[] {
     ...Object.values(FACTIONS).map((faction) => faction.name),
     ...Object.values(CARD_FAMILIES),
     ...Object.values(RARITIES),
+    ...Object.values(KEYWORDS),
     ...Object.values(BOARDS)
   ]
 }
