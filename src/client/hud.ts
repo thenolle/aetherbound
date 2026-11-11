@@ -46,14 +46,15 @@ function link(gl: WebGL2RenderingContext, vertex: WebGLShader, fragment: WebGLSh
   return program
 }
 
-export class HudRenderer {
+export type Frame = Readonly<{ width: number, height: number }>
+
+export class Presenter {
+  readonly pen: CanvasRenderingContext2D
   private readonly canvas: HTMLCanvasElement
   private readonly gl: WebGL2RenderingContext
   private readonly program: WebGLProgram
   private readonly texture: WebGLTexture
   private readonly surface: HTMLCanvasElement
-  private readonly pen: CanvasRenderingContext2D
-  private ratio = 1
 
   constructor(canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl2')
@@ -63,14 +64,12 @@ export class HudRenderer {
     if (pen === null) throw new Error('2D canvas is not available in this browser')
     const texture = gl.createTexture()
     if (texture === null) throw new Error('texture allocation failed')
-
     this.canvas = canvas
     this.gl = gl
     this.surface = surface
     this.pen = pen
     this.texture = texture
     this.program = link(gl, compile(gl, gl.VERTEX_SHADER, VERTEX), compile(gl, gl.FRAGMENT_SHADER, FRAGMENT))
-
     gl.bindTexture(gl.TEXTURE_2D, texture)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
@@ -78,40 +77,52 @@ export class HudRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
   }
 
-  draw(lines: readonly HudLine[]): void {
-    this.resize()
-    const { pen, gl, canvas, ratio } = this
-    const size = FONT_PX * ratio
-
-    pen.setTransform(1, 0, 0, 1, 0, 0)
-    pen.fillStyle = BACKGROUND
-    pen.fillRect(0, 0, canvas.width, canvas.height)
-    pen.font = `${size}px monospace`
-    pen.textBaseline = 'top'
-    let y = 12 * ratio
-    for (const line of lines) {
-      pen.fillStyle = COLORS[line.tone]
-      pen.fillText(line.text, 14 * ratio, y)
-      y += size * 1.4
+  frame(): Frame {
+    const ratio = window.devicePixelRatio || 1
+    const width = Math.max(1, Math.floor(window.innerWidth * ratio))
+    const height = Math.max(1, Math.floor(window.innerHeight * ratio))
+    if (width !== this.canvas.width || height !== this.canvas.height) {
+      this.canvas.width = width
+      this.canvas.height = height
+      this.surface.width = width
+      this.surface.height = height
+      this.canvas.style.width = `${window.innerWidth}px`
+      this.canvas.style.height = `${window.innerHeight}px`
     }
+    this.pen.setTransform(ratio, 0, 0, ratio, 0, 0)
+    return { width: window.innerWidth, height: window.innerHeight }
+  }
 
+  present(): void {
+    const { gl, canvas } = this
     gl.bindTexture(gl.TEXTURE_2D, this.texture)
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.surface)
     gl.viewport(0, 0, canvas.width, canvas.height)
     gl.useProgram(this.program)
     gl.drawArrays(gl.TRIANGLES, 0, 3)
   }
+}
 
-  private resize(): void {
-    this.ratio = window.devicePixelRatio || 1
-    const width = Math.max(1, Math.floor(window.innerWidth * this.ratio))
-    const height = Math.max(1, Math.floor(window.innerHeight * this.ratio))
-    if (width === this.canvas.width && height === this.canvas.height) return
-    this.canvas.width = width
-    this.canvas.height = height
-    this.surface.width = width
-    this.surface.height = height
-    this.canvas.style.width = `${window.innerWidth}px`
-    this.canvas.style.height = `${window.innerHeight}px`
+export class HudRenderer {
+  private readonly presenter: Presenter
+
+  constructor(presenter: Presenter) {
+    this.presenter = presenter
+  }
+
+  draw(lines: readonly HudLine[]): void {
+    const { width, height } = this.presenter.frame()
+    const { pen } = this.presenter
+    pen.fillStyle = BACKGROUND
+    pen.fillRect(0, 0, width, height)
+    pen.font = `${FONT_PX}px monospace`
+    pen.textBaseline = 'top'
+    let y = 12
+    for (const line of lines) {
+      pen.fillStyle = COLORS[line.tone]
+      pen.fillText(line.text, 14, y)
+      y += FONT_PX * 1.4
+    }
+    this.presenter.present()
   }
 }

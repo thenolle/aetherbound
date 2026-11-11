@@ -3,9 +3,9 @@ import type { AttackTarget, Holding, Minion, Oath } from '../rules/types'
 import type { CardRegistry } from '../shared/cards'
 import { clampIndex, targetList } from './controls'
 import type { Selection } from './controls'
+import type { Tone } from '../ui/nodes'
 
-export type Tone = 'normal' | 'dim' | 'accent' | 'warn'
-
+export type { Tone }
 export type HudLine = Readonly<{ text: string, tone: Tone }>
 
 export type HudInput = Readonly<{

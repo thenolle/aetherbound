@@ -1,17 +1,28 @@
+import { BRINE_LOCK_CARDS } from '../content/brine-lock'
 import { EXCHEQUER_CARDS } from '../content/exchequer'
 import type { ReplayStep } from '../persistence/restore'
 import type { MatchView } from '../rules/projection'
 import { createRegistry } from '../shared/cards'
+import { button, centered, column, label, spacer } from '../ui/nodes'
+import type { UiNode } from '../ui/nodes'
+import { DEFAULT_THEME } from '../ui/painter'
+import { UiHost } from '../ui/host'
+import { CanvasPainter } from './canvas-painter'
 import { INITIAL_SELECTION, handleKey } from './controls'
 import type { Selection } from './controls'
-import { HudRenderer } from './hud'
+import { HudRenderer, Presenter } from './hud'
 import { buildHud, describeEvent } from './hud-text'
+import { fieldOf, textOf } from './json'
+import { MenuController } from './menu'
+import type { Api } from './menu'
 import { GameSocket } from './net'
 
-const registry = createRegistry(EXCHEQUER_CARDS)
+const registry = createRegistry([...EXCHEQUER_CARDS, ...BRINE_LOCK_CARDS])
 const NOTE_LIMIT = 8
 const POLL_MS = 1500
 const HANDLED_KEYS = new Set(['ArrowLeft', 'ArrowRight'])
+
+type Screen = 'signin' | 'menu' | 'game' | 'replay'
 
 async function readJson(response: Response): Promise<unknown> {
   try { return await response.json() } catch { return null }
@@ -22,8 +33,12 @@ async function postJson(path: string): Promise<unknown> {
   return response.ok ? readJson(response) : null
 }
 
-function fieldOf(body: unknown, key: string): unknown {
-  return typeof body === 'object' && body !== null ? (body as Record<string, unknown>)[key] : undefined
+const api: Api = {
+  get: async (path) => {
+    const response = await fetch(path)
+    return response.ok ? readJson(response) : null
+  },
+  post: postJson
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
@@ -32,9 +47,14 @@ async function start(): Promise<void> {
   const canvas = document.getElementById('stage')
   if (!(canvas instanceof HTMLCanvasElement)) throw new Error('missing canvas')
   document.body.style.margin = '0'
-  document.body.style.background = '#14161a'
+  document.body.style.background = DEFAULT_THEME.background
   canvas.style.display = 'block'
-  const hud = new HudRenderer(canvas)
+  const presenter = new Presenter(canvas)
+  const hud = new HudRenderer(presenter)
+  const painter = new CanvasPainter(presenter.pen)
+  const host = new UiHost()
+  let screen: Screen = 'signin'
+  let menu: MenuController | null = null
   let view: MatchView | null = null
   let selection: Selection = INITIAL_SELECTION
   let status = 'checking your session'
@@ -45,11 +65,28 @@ async function start(): Promise<void> {
   let historyIds: string[] = []
   let notes: string[] = []
   let socket: GameSocket | null = null
-  const render = (): void => hud.draw(buildHud({ status, view, selection, notes, registry }))
   const note = (text: string): void => {
     if (text === '') return
     notes.push(text)
     if (notes.length > NOTE_LIMIT) notes.shift()
+  }
+  const signInTree = (): UiNode => column([
+    label('AETHERBOUND: SHATTERED CONCORD', { tone: 'accent', size: 26 }),
+    label(status, { tone: 'dim' }),
+    button('google', 'Sign in with Google', () => window.location.assign('/auth/google/start')),
+    spacer(),
+    ...notes.map((line) => label(line, { tone: 'warn' }))
+  ], { padding: 28, gap: 12 })
+  const render = (): void => {
+    if (screen === 'signin' || screen === 'menu') {
+      const { width, height } = presenter.frame()
+      const tree = screen === 'menu' && menu !== null ? menu.build() : signInTree()
+      host.setTree(centered(tree), { x: 0, y: 0, width, height })
+      host.draw(painter, DEFAULT_THEME)
+      presenter.present()
+      return
+    }
+    hud.draw(buildHud({ status, view, selection, notes, registry }))
   }
   const signOut = async (): Promise<void> => {
     await fetch('/auth/logout', { method: 'POST' })
@@ -59,16 +96,11 @@ async function start(): Promise<void> {
     const step = steps[stepIndex]
     if (step === undefined) return
     view = step.view
-    notes = steps
-      .slice(0, stepIndex + 1)
-      .flatMap((entry) => entry.events.map((item) => describeEvent(item.event, registry)))
-      .slice(-NOTE_LIMIT)
+    notes = steps.slice(0, stepIndex + 1).flatMap((entry) => entry.events.map((item) => describeEvent(item.event, registry))).slice(-NOTE_LIMIT)
     status = `replay: step ${stepIndex} of ${steps.length - 1} (left/right to step)`
   }
   const loadHistory = async (): Promise<void> => {
-    const response = await fetch('/api/history')
-    if (!response.ok) return
-    const matches = fieldOf(await readJson(response), 'matches')
+    const matches = fieldOf(await api.get('/api/history'), 'matches')
     if (!Array.isArray(matches)) return
     historyIds = []
     note('-- recent matches (press 1-5 to replay) --')
@@ -80,77 +112,7 @@ async function start(): Promise<void> {
     })
     render()
   }
-  window.addEventListener('resize', render)
-  window.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && !signedIn) {
-      window.location.assign('/auth/google/start')
-      return
-    }
-    if (!signedIn) return
-    if (event.key === 'l') {
-      void signOut()
-      return
-    }
-    if (event.key === 'Escape' && queueing) {
-      queueing = false
-      void fetch('/api/queue/leave', { method: 'POST' })
-      status = 'left the queue: reload to search again'
-      render()
-      return
-    }
-    if (event.key === 'y') {
-      void loadHistory()
-      return
-    }
-    const picked = Number(event.key)
-    if (Number.isInteger(picked) && picked >= 1 && picked <= historyIds.length) {
-      window.location.assign(`/?replay=${historyIds[picked - 1]}`)
-      return
-    }
-    if (steps.length > 0) {
-      if (event.key === 'ArrowRight') stepIndex = Math.min(stepIndex + 1, steps.length - 1)
-      if (event.key === 'ArrowLeft') stepIndex = Math.max(stepIndex - 1, 0)
-      showStep()
-      event.preventDefault()
-      render()
-      return
-    }
-    if (view === null || socket === null) return
-    const outcome = handleKey(event.key, view, selection, registry)
-    selection = outcome.selection
-    note(outcome.note)
-    if (outcome.command !== null) socket.send(outcome.command)
-    if (HANDLED_KEYS.has(event.key)) event.preventDefault()
-    render()
-  })
-  render()
-  const params = new URLSearchParams(window.location.search)
-  if (params.get('auth') === 'denied') note('google sign-in was cancelled')
-  if (params.get('auth') === 'failed') note('google sign-in failed, try again')
-  const me = await fetch('/auth/me')
-  if (!me.ok) {
-    status = 'not signed in: press Enter to sign in with Google'
-    render()
-    return
-  }
-  const name = fieldOf(await readJson(me), 'displayName')
-  const playerName = typeof name === 'string' ? name : 'player'
-  signedIn = true
-  const replayId = params.get('replay')
-  if (replayId !== null) {
-    const response = await fetch(`/api/replay/${encodeURIComponent(replayId)}`)
-    const loaded = response.ok ? fieldOf(await readJson(response), 'steps') : null
-    if (!Array.isArray(loaded) || loaded.length === 0) {
-      status = 'replay not found'
-      render()
-      return
-    }
-    steps = loaded as ReplayStep[]
-    showStep()
-    render()
-    return
-  }
-  const connect = (token: string, seat: number): void => {
+  const connect = (token: string, seat: number, playerName: string): void => {
     queueing = false
     status = `${playerName}: seat ${seat}   (l signs out, y history)`
     render()
@@ -182,30 +144,116 @@ async function start(): Promise<void> {
       }
     })
   }
-  queueing = true
-  status = `signed in as ${playerName}: searching for an opponent (Escape cancels)`
-  render()
-  const mode = params.get('mode') === 'ranked' ? '?mode=ranked' : ''
-  let queue: unknown = await postJson(`/api/queue/join${mode}`)
-  while (queueing) {
-    if (fieldOf(queue, 'status') === 'matched') {
-      const token = fieldOf(queue, 'token')
-      const seat = fieldOf(queue, 'seat')
-      if (typeof token === 'string' && typeof seat === 'number') {
-        connect(token, seat)
+  const beginQueue = async (mode: 'casual' | 'ranked', playerName: string): Promise<void> => {
+    screen = 'game'
+    queueing = true
+    notes = []
+    status = `${playerName}: searching for a ${mode} opponent (Escape cancels)`
+    render()
+    let queue: unknown = await postJson(`/api/queue/join${mode === 'ranked' ? '?mode=ranked' : ''}`)
+    while (queueing) {
+      if (fieldOf(queue, 'status') === 'matched') {
+        const token = fieldOf(queue, 'token')
+        const seat = fieldOf(queue, 'seat')
+        if (typeof token === 'string' && typeof seat === 'number') {
+          connect(token, seat, playerName)
+          return
+        }
+      }
+      await sleep(POLL_MS)
+      if (!queueing) return
+      const polled = await fetch('/api/queue/status')
+      if (!polled.ok) {
+        status = `queue error (${polled.status})`
+        render()
         return
       }
+      queue = await readJson(polled)
     }
-    await sleep(POLL_MS)
-    if (!queueing) return
-    const polled = await fetch('/api/queue/status')
-    if (!polled.ok) {
-      status = `queue error (${polled.status})`
+  }
+  window.addEventListener('resize', render)
+  canvas.addEventListener('pointerdown', (event) => {
+    if ((screen === 'signin' || screen === 'menu') && host.pointer(event.clientX, event.clientY, 'down')) render()
+  })
+  canvas.addEventListener('pointermove', (event) => {
+    if ((screen === 'signin' || screen === 'menu') && host.pointer(event.clientX, event.clientY, 'move')) render()
+  })
+  window.addEventListener('keydown', (event) => {
+    if (screen === 'signin' || screen === 'menu') {
+      if (host.key(event.key)) {
+        event.preventDefault()
+        render()
+      }
+      return
+    }
+    if (!signedIn) return
+    if (event.key === 'l') {
+      void signOut()
+      return
+    }
+    if (event.key === 'Escape' && queueing) {
+      queueing = false
+      void fetch('/api/queue/leave', { method: 'POST' })
+      screen = 'menu'
       render()
       return
     }
-    queue = await readJson(polled)
+    if (event.key === 'y') {
+      void loadHistory()
+      return
+    }
+    const picked = Number(event.key)
+    if (Number.isInteger(picked) && picked >= 1 && picked <= historyIds.length) {
+      window.location.assign(`/?replay=${historyIds[picked - 1]}`)
+      return
+    }
+    if (steps.length > 0) {
+      if (event.key === 'ArrowRight') stepIndex = Math.min(stepIndex + 1, steps.length - 1)
+      if (event.key === 'ArrowLeft') stepIndex = Math.max(stepIndex - 1, 0)
+      showStep()
+      event.preventDefault()
+      render()
+      return
+    }
+    if (view === null || socket === null) return
+    const outcome = handleKey(event.key, view, selection, registry)
+    selection = outcome.selection
+    note(outcome.note)
+    if (outcome.command !== null) socket.send(outcome.command)
+    if (HANDLED_KEYS.has(event.key)) event.preventDefault()
+    render()
+  })
+  const params = new URLSearchParams(window.location.search)
+  if (params.get('auth') === 'denied') note('google sign-in was cancelled')
+  if (params.get('auth') === 'failed') note('google sign-in failed, try again')
+  render()
+  const me = await fetch('/auth/me')
+  if (!me.ok) {
+    status = 'Sign in to play.'
+    render()
+    return
   }
+  const playerName = textOf(await readJson(me), 'displayName') ?? 'player'
+  signedIn = true
+  const replayId = params.get('replay')
+  if (replayId !== null) {
+    const loaded = fieldOf(await api.get(`/api/replay/${encodeURIComponent(replayId)}`), 'steps')
+    if (!Array.isArray(loaded) || loaded.length === 0) {
+      screen = 'replay'
+      status = 'replay not found'
+      render()
+      return
+    }
+    screen = 'replay'
+    steps = loaded as ReplayStep[]
+    showStep()
+    render()
+    return
+  }
+  menu = new MenuController(api, playerName, { play: (mode) => void beginQueue(mode, playerName), signOut: () => void signOut() }, render)
+  screen = 'menu'
+  render()
+  await menu.refresh()
 }
 
 start().catch((error: unknown) => console.error(error))
