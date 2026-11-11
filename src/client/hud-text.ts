@@ -22,7 +22,7 @@ const targetText = (target: AttackTarget): string => (target.kind === 'hero' ? '
 
 function minionText(minion: Minion, registry: CardRegistry): string {
   const keywords = minion.keywords.length > 0 ? ` [${minion.keywords.join(',')}]` : ''
-  return `#${minion.uid} ${nameOf(registry, minion.cardId)} ${minion.attack}/${minion.health}${keywords}${minion.exhausted ? ` (rest)${minion.frozen === true ? ' (frozen)' : ''}` : ''}`
+  return `#${minion.uid} ${nameOf(registry, minion.cardId)} ${minion.attack}/${minion.health}${keywords}${minion.exhausted ? ` (rest)${minion.frozen === true ? ' (frozen)' : ''}` : ''}${minion.blight === undefined ? '' : ` (blight ${minion.blight})`}`
 }
 
 function holdingText(holding: Holding, registry: CardRegistry): string { return `#${holding.uid} ${nameOf(registry, holding.cardId)} x${holding.charges}${holding.used ? ' (used)' : ''}` }
@@ -51,6 +51,9 @@ export function describeEvent(event: ViewEvent, registry: CardRegistry): string 
     case 'oath_progress': return `${who(event.player)} oath #${event.uid} progress ${event.progress}`
     case 'oath_fulfilled': return `${who(event.player)} fulfils oath #${event.uid}`
     case 'frozen': return `#${event.uid} is frozen`
+    case 'minion_summoned': return `${who(event.player)} summons ${card(event.cardId)} as #${event.uid}`
+    case 'blighted': return `#${event.uid} is blighted (${event.stacks})`
+    case 'grew': return `#${event.uid} grows to ${event.attack}/${event.health}`
     case 'attacked': return `${who(event.player)} #${event.attackerUid} attacks ${targetText(event.target)}`
     case 'hero_attacked': return `${who(event.player)} hero attacks ${targetText(event.target)}`
     case 'damaged': return `${event.uid === null ? `${who(event.player)} hero` : `#${event.uid}`} takes ${event.amount}`

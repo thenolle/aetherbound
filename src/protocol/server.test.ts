@@ -42,6 +42,9 @@ const ALL_EVENTS: readonly ViewEvent[] = [
   { type: 'oath_progress', player: 0, uid: 12, progress: 1 },
   { type: 'oath_fulfilled', player: 0, uid: 12 },
   { type: 'frozen', player: 1, uid: 5 },
+  { type: 'minion_summoned', player: 0, uid: 12, cardId: cid(9) },
+  { type: 'blighted', player: 1, uid: 5, stacks: 3 },
+  { type: 'grew', player: 0, uid: 12, attack: 4, health: 6 },
 ]
 
 const eventsMessage: ServerMessage = {
@@ -61,12 +64,16 @@ function richState() {
     maxHealth: 2,
     exhausted: true,
     keywords: ['shield-wall', 'haste'],
+    blight: 2,
+    grows: { attack: 1, health: 2 },
     onDeath: [
       { kind: 'damage', amount: 1, target: 'enemy-hero' },
       { kind: 'draw', count: 1 },
       { kind: 'tariff', amount: 2 },
       { kind: 'heal', amount: 3, target: 'all-enemy-minions' },
       { kind: 'freeze', target: 'all-enemy-minions' },
+      { kind: 'summon', cardId: cid(9), attack: 1, health: 1, count: 2 },
+      { kind: 'blight', amount: 2, target: 'chosen-enemy-minion' },
     ]
   }]
   state.players[1].board = [{ uid: 2, cardId: cid(3), attack: 3, health: 3, maxHealth: 3, exhausted: false, keywords: [], onDeath: [] }]
@@ -82,7 +89,7 @@ function richState() {
   return state
 }
 
-const frameOf = (id: number, ...payload: number[]): Uint8Array =>new Uint8Array([0xae, 0x01, 0x00, id, 0x00, payload.length, ...payload])
+const frameOf = (id: number, ...payload: number[]): Uint8Array => new Uint8Array([0xae, 0x01, 0x00, id, 0x00, payload.length, ...payload])
 const outcome = (data: Uint8Array): 'ok' | ProtocolErrorCode => {
   try {
     decodeServerFrame(data)

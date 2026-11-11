@@ -1,10 +1,16 @@
+import type { Id } from './ids'
+
 export type EffectTarget = 'enemy-hero' | 'own-hero' | 'chosen-enemy-minion' | 'all-enemy-minions'
 
 export type Effect =
   | Readonly<{ kind: 'damage' | 'heal', amount: number, target: EffectTarget }>
   | Readonly<{ kind: 'freeze', target: EffectTarget }>
+  | Readonly<{ kind: 'blight', amount: number, target: EffectTarget }>
+  | Readonly<{ kind: 'summon', cardId: Id<'card'>, attack: number, health: number, count: number }>
   | Readonly<{ kind: 'draw', count: number }>
   | Readonly<{ kind: 'tariff', amount: number }>
+
+export type SummonEffect = Extract<Effect, { kind: 'summon' }>
 
 export const MAX_EFFECTS_PER_CARD = 8
 
@@ -13,7 +19,7 @@ export const SNARE_TRIGGERS = ['enemy-play', 'enemy-cast', 'enemy-attack'] as co
 export type SnareTrigger = typeof SNARE_TRIGGERS[number]
 
 export function effectTarget(effect: Effect): EffectTarget | null {
-  return effect.kind === 'damage' || effect.kind === 'heal' || effect.kind === 'freeze' ? effect.target : null
+  return effect.kind === 'damage' || effect.kind === 'heal' || effect.kind === 'freeze' || effect.kind === 'blight' ? effect.target : null
 }
 
 export function needsChosenTarget(effects: readonly Effect[]): boolean {

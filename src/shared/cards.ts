@@ -3,7 +3,7 @@ import type { Id } from './ids'
 import { GAME_LIMITS } from './lexicon'
 import type { CardFamilyId, FactionId, KeywordId, LocalizedName, RarityId } from './lexicon'
 import { MAX_EFFECTS_PER_CARD, SNARE_TRIGGERS, needsChosenTarget } from './effects'
-import type { Effect, SnareTrigger } from './effects'
+import type { Effect, SnareTrigger, SummonEffect } from './effects'
 
 export type CardFaction = FactionId | 'neutral'
 
@@ -24,6 +24,8 @@ export type CardDefinition = Readonly<{
   onDeath?: readonly Effect[]
   trigger?: SnareTrigger
   goal?: number
+  token?: boolean
+  grows?: Readonly<{ attack: number, health: number }>
   flavor: LocalizedName
 }>
 
@@ -47,6 +49,13 @@ function checkEffects(effects: readonly Effect[], fail: Fail): void {
       if (!Number.isInteger(effect.count) || effect.count < 1 || effect.count > 10) fail('draw count must be 1 to 10')
     } else if (effect.kind === 'freeze') {
       if (effect.target !== 'chosen-enemy-minion' && effect.target !== 'all-enemy-minions') fail('freeze needs an enemy minion target')
+    } else if (effect.kind === 'blight') {
+      if (effect.target !== 'chosen-enemy-minion' && effect.target !== 'all-enemy-minions') fail('blight needs an enemy minion target')
+      if (!Number.isInteger(effect.amount) || effect.amount < 1 || effect.amount > 5) fail('blight amount must be 1 to 5')
+    } else if (effect.kind === 'summon') {
+      if (!Number.isInteger(effect.count) || effect.count < 1 || effect.count > GAME_LIMITS.boardSlots) fail('summon count must be 1 to 7')
+      if (!Number.isInteger(effect.attack) || effect.attack < 0 || effect.attack > 99) fail('summoned attack must be 0 to 99')
+      if (!Number.isInteger(effect.health) || effect.health < 1 || effect.health > 99) fail('summoned health must be 1 to 99')
     } else if (!Number.isInteger(effect.amount) || effect.amount < 1 || effect.amount > 99) {
       fail('effect amount must be 1 to 99')
     }
@@ -59,6 +68,12 @@ function assertCardDefinition(card: CardDefinition): void {
   const fail: Fail = (reason) => { throw new DomainError('invalid_content', `card ${card.id}: ${reason}`) }
   if (!validCost(card.cost)) fail(`cost must be an integer between 0 and ${GAME_LIMITS.aetherPressureMax}`)
   if (card.keywords !== undefined && card.family !== 'bound') fail('only bound cards carry keywords')
+  if (card.grows !== undefined) {
+    const { attack, health } = card.grows
+    const valid = Number.isInteger(attack) && Number.isInteger(health) && attack >= 0 && health >= 0 && attack <= 9 && health <= 9 && attack + health > 0
+    if (card.family !== 'bound' || !valid) fail('only bound cards can grow, with integer bonuses from 0 to 9 that are not both zero')
+  }
+  if (card.token === true && card.family !== 'bound') fail('only bound cards can be tokens')
   if ((card.onPlay !== undefined || card.onDeath !== undefined) && card.family !== 'bound') fail('only bound cards carry triggers')
   if (card.family === 'bound') {
     if (card.attack === undefined || !Number.isInteger(card.attack) || card.attack < 0) fail('bound cards need an integer attack >= 0')
@@ -97,12 +112,22 @@ export function assertHeroDefinition(hero: HeroDefinition): void {
   checkEffects(hero.ability.effects, fail)
 }
 
+export function summonsOf(card: CardDefinition): SummonEffect[] {
+  return [...(card.effects ?? []), ...(card.onPlay ?? []), ...(card.onDeath ?? [])].filter((effect): effect is SummonEffect => effect.kind === 'summon')
+}
+
 export function createRegistry(cards: readonly CardDefinition[]): CardRegistry {
   const registry = new Map<string, CardDefinition>()
   for (const card of cards) {
     assertCardDefinition(card)
     if (registry.has(card.id)) throw new DomainError('invalid_content', `duplicate card id ${card.id}`)
     registry.set(card.id, card)
+  }
+  for (const card of cards) {
+    for (const summon of summonsOf(card)) {
+      const token = registry.get(summon.cardId)
+      if (token === undefined || token.token !== true || token.attack !== summon.attack || token.health !== summon.health) throw new DomainError('invalid_content', `card ${card.id}: summons ${summon.cardId}, which is not a matching token`)
+    }
   }
   return registry
 }

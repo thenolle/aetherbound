@@ -57,6 +57,9 @@ export const EVENT_IDS = {
   oath_progress: 25,
   oath_fulfilled: 26,
   frozen: 27,
+  minion_summoned: 28,
+  blighted: 29,
+  grew: 30,
 } as const satisfies Record<ViewEvent['type'], number>
 
 const MESSAGE_TYPE_BY_ID = new Map<number, ServerMessage['type']>((Object.keys(MESSAGE_IDS) as ServerMessage['type'][]).map((type) => [MESSAGE_IDS[type], type]))
@@ -170,6 +173,18 @@ function writeEffect(w: ByteWriter, effect: Effect): void {
       w.u8(4)
       w.u8(EFFECT_TARGETS.indexOf(effect.target))
       return
+    case 'blight':
+      w.u8(6)
+      w.varuint(effect.amount)
+      w.u8(EFFECT_TARGETS.indexOf(effect.target))
+      return
+    case 'summon':
+      w.u8(5)
+      writeId(w, effect.cardId)
+      w.varuint(effect.attack)
+      w.varuint(effect.health)
+      w.varuint(effect.count)
+      return
     case 'draw':
       w.u8(2)
       w.varuint(effect.count)
@@ -196,6 +211,13 @@ function readEffect(r: ByteReader): Effect {
     if (target === undefined) throw malformed('invalid effect target')
     return { kind: 'freeze', target }
   }
+  if (kind === 5) return { kind: 'summon', cardId: readId(r, 'card'), attack: r.varuint(), health: r.varuint(), count: r.varuint() }
+  if (kind === 6) {
+    const amount = r.varuint()
+    const target = EFFECT_TARGETS[r.u8()]
+    if (target === undefined) throw malformed('invalid effect target')
+    return { kind: 'blight', amount, target }
+  }
   throw malformed('invalid effect kind')
 }
 
@@ -207,6 +229,14 @@ function writeMinion(w: ByteWriter, minion: Minion): void {
   w.varuint(minion.maxHealth)
   writeBool(w, minion.exhausted)
   writeBool(w, minion.frozen === true)
+  w.varuint(minion.blight ?? 0)
+  if (minion.grows === undefined) {
+    w.u8(0)
+  } else {
+    w.u8(1)
+    w.varuint(minion.grows.attack)
+    w.varuint(minion.grows.health)
+  }
   writeList(w, minion.keywords, (keyword) => w.u8(KEYWORD_IDS.indexOf(keyword)))
   writeList(w, minion.onDeath, (effect) => writeEffect(w, effect))
 }
@@ -219,13 +249,29 @@ function readMinion(r: ByteReader): Minion {
   const maxHealth = r.varuint()
   const exhausted = readBool(r)
   const frozen = readBool(r)
+  const blight = r.varuint()
+  const growsFlag = r.u8()
+  if (growsFlag > 1) throw malformed('invalid presence byte')
+  const grows = growsFlag === 1 ? { attack: r.varuint(), health: r.varuint() } : null
   const keywords = readList<KeywordId>(r, () => {
     const keyword = KEYWORD_IDS[r.u8()]
     if (keyword === undefined) throw malformed('invalid keyword')
     return keyword
   })
   const onDeath = readList(r, () => readEffect(r))
-  return { uid, cardId, attack, health, maxHealth, exhausted, ...(frozen ? { frozen: true } : {}), keywords, onDeath }
+  return {
+    uid,
+    cardId,
+    attack,
+    health,
+    maxHealth,
+    exhausted,
+    ...(frozen ? { frozen: true } : {}),
+    ...(blight > 0 ? { blight } : {}),
+    ...(grows === null ? {} : { grows }),
+    keywords,
+    onDeath
+  }
 }
 
 function writeWeapon(w: ByteWriter, weapon: Weapon | null): void {
@@ -458,6 +504,22 @@ function writeEvent(w: ByteWriter, event: ViewEvent): void {
       w.u8(event.player)
       w.varuint(event.uid)
       return
+    case 'minion_summoned':
+      w.u8(event.player)
+      w.varuint(event.uid)
+      writeId(w, event.cardId)
+      return
+    case 'blighted':
+      w.u8(event.player)
+      w.varuint(event.uid)
+      w.varuint(event.stacks)
+      return
+    case 'grew':
+      w.u8(event.player)
+      w.varuint(event.uid)
+      w.varuint(event.attack)
+      w.varuint(event.health)
+      return
     case 'attacked':
       w.u8(event.player)
       w.varuint(event.attackerUid)
@@ -491,54 +553,36 @@ function readEvent(r: ByteReader): ViewEvent {
   const type = EVENT_TYPE_BY_ID.get(r.u8())
   if (type === undefined) throw new ProtocolError('unsupported', 'unknown event id')
   switch (type) {
-    case 'turn_started':
-      return { type, player: readPlayer(r), turn: r.varuint(), aether: r.varuint() }
+    case 'turn_started': return { type, player: readPlayer(r), turn: r.varuint(), aether: r.varuint() }
     case 'turn_timed_out':
     case 'iron_broken':
     case 'ability_used':
-    case 'surrendered':
-      return { type, player: readPlayer(r) }
-    case 'card_drawn':
-      return { type, player: readPlayer(r), cardId: readOptCard(r) }
+    case 'surrendered': return { type, player: readPlayer(r) }
+    case 'card_drawn': return { type, player: readPlayer(r), cardId: readOptCard(r) }
     case 'card_burned':
-    case 'writ_cast':
-      return { type, player: readPlayer(r), cardId: readId(r, 'card') }
-    case 'fatigue':
-      return { type, player: readPlayer(r), damage: r.varuint() }
-    case 'minion_played':
-      return { type, player: readPlayer(r), uid: r.varuint(), cardId: readId(r, 'card'), position: r.varuint() }
-    case 'iron_equipped':
-      return { type, player: readPlayer(r), cardId: readId(r, 'card'), attack: r.varuint(), durability: r.varuint() }
-    case 'holding_placed':
-      return { type, player: readPlayer(r), uid: r.varuint(), cardId: readId(r, 'card'), charges: r.varuint() }
+    case 'writ_cast': return { type, player: readPlayer(r), cardId: readId(r, 'card') }
+    case 'fatigue': return { type, player: readPlayer(r), damage: r.varuint() }
+    case 'minion_played': return { type, player: readPlayer(r), uid: r.varuint(), cardId: readId(r, 'card'), position: r.varuint() }
+    case 'iron_equipped': return { type, player: readPlayer(r), cardId: readId(r, 'card'), attack: r.varuint(), durability: r.varuint() }
+    case 'holding_placed': return { type, player: readPlayer(r), uid: r.varuint(), cardId: readId(r, 'card'), charges: r.varuint() }
     case 'holding_activated':
-    case 'holding_destroyed':
-      return { type, player: readPlayer(r), uid: r.varuint() }
-    case 'snare_set':
-      return { type, player: readPlayer(r), uid: r.varuint(), cardId: readOptCard(r) }
-    case 'snare_sprung':
-      return { type, player: readPlayer(r), uid: r.varuint(), cardId: readId(r, 'card') }
-    case 'oath_sworn':
-      return { type, player: readPlayer(r), uid: r.varuint(), cardId: readId(r, 'card'), goal: r.varuint() }
-    case 'oath_progress':
-      return { type, player: readPlayer(r), uid: r.varuint(), progress: r.varuint() }
-    case 'oath_fulfilled':
-      return { type, player: readPlayer(r), uid: r.varuint() }
-    case 'attacked':
-      return { type, player: readPlayer(r), attackerUid: r.varuint(), target: readTarget(r) }
-    case 'hero_attacked':
-      return { type, player: readPlayer(r), target: readTarget(r) }
+    case 'holding_destroyed': return { type, player: readPlayer(r), uid: r.varuint() }
+    case 'snare_set': return { type, player: readPlayer(r), uid: r.varuint(), cardId: readOptCard(r) }
+    case 'snare_sprung': return { type, player: readPlayer(r), uid: r.varuint(), cardId: readId(r, 'card') }
+    case 'oath_sworn': return { type, player: readPlayer(r), uid: r.varuint(), cardId: readId(r, 'card'), goal: r.varuint() }
+    case 'oath_progress': return { type, player: readPlayer(r), uid: r.varuint(), progress: r.varuint() }
+    case 'oath_fulfilled': return { type, player: readPlayer(r), uid: r.varuint() }
+    case 'attacked': return { type, player: readPlayer(r), attackerUid: r.varuint(), target: readTarget(r) }
+    case 'hero_attacked': return { type, player: readPlayer(r), target: readTarget(r) }
     case 'damaged':
-    case 'healed':
-      return { type, player: readPlayer(r), uid: readOptUid(r), amount: r.varuint() }
-    case 'taxed':
-      return { type, player: readPlayer(r), amount: r.varuint() }
-    case 'minion_died':
-      return { type, player: readPlayer(r), uid: r.varuint() }
-    case 'game_over':
-      return { type, winner: readPlayer(r) }
-    case 'frozen':
-      return { type, player: readPlayer(r), uid: r.varuint() }
+    case 'healed': return { type, player: readPlayer(r), uid: readOptUid(r), amount: r.varuint() }
+    case 'taxed': return { type, player: readPlayer(r), amount: r.varuint() }
+    case 'minion_died': return { type, player: readPlayer(r), uid: r.varuint() }
+    case 'game_over': return { type, winner: readPlayer(r) }
+    case 'frozen': return { type, player: readPlayer(r), uid: r.varuint() }
+    case 'minion_summoned': return { type, player: readPlayer(r), uid: r.varuint(), cardId: readId(r, 'card') }
+    case 'blighted': return { type, player: readPlayer(r), uid: r.varuint(), stacks: r.varuint() }
+    case 'grew': return { type, player: readPlayer(r), uid: r.varuint(), attack: r.varuint(), health: r.varuint() }
   }
 }
 

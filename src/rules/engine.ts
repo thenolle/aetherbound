@@ -82,6 +82,15 @@ function startTurn(state: MatchState, events: GameEvent[]): void {
       if (frozen) delete minion.frozen
     }
   }
+  for (const minion of side.board) {
+    const stacks = minion.blight ?? 0
+    if (stacks <= 0) continue
+    minion.health -= stacks
+    events.push({ type: 'damaged', player: state.active, uid: minion.uid, amount: stacks })
+    if (stacks > 1) minion.blight = stacks - 1
+    else delete minion.blight
+  }
+  settleBoards(state, events)
 }
 
 function passTurn(state: MatchState, events: GameEvent[]): void {
@@ -109,6 +118,38 @@ function applyEffect(state: MatchState, caster: PlayerIndex, effect: Effect, cho
       if (chosen !== undefined) chill(chosen)
     } else if (effect.target === 'all-enemy-minions') {
       for (const minion of state.players[foe].board) chill(minion)
+    }
+    return
+  }
+  if (effect.kind === 'blight') {
+    const amount = effect.amount
+    const infect = (minion: Minion): void => {
+      minion.blight = Math.min(RULES.maxBlight, (minion.blight ?? 0) + amount)
+      events.push({ type: 'blighted', player: foe, uid: minion.uid, stacks: minion.blight })
+    }
+    if (effect.target === 'chosen-enemy-minion') {
+      if (chosen !== undefined) infect(chosen)
+    } else if (effect.target === 'all-enemy-minions') {
+      for (const minion of state.players[foe].board) infect(minion)
+    }
+    return
+  }
+  if (effect.kind === 'summon') {
+    const side = state.players[caster]
+    for (let count = 0; count < effect.count && side.board.length < GAME_LIMITS.boardSlots; count += 1) {
+      const minion: Minion = {
+        uid: state.nextUid,
+        cardId: effect.cardId,
+        attack: effect.attack,
+        health: effect.health,
+        maxHealth: effect.health,
+        exhausted: true,
+        keywords: [],
+        onDeath: []
+      }
+      state.nextUid += 1
+      side.board.push(minion)
+      events.push({ type: 'minion_summoned', player: caster, uid: minion.uid, cardId: effect.cardId })
     }
     return
   }
@@ -169,6 +210,16 @@ function settleBoards(state: MatchState, events: GameEvent[]): void {
       side.board = survivors
     }
     if (dead.length === 0) return
+    for (const owner of PLAYERS) {
+      for (const minion of state.players[owner].board) {
+        const grows = minion.grows
+        if (grows === undefined) continue
+        minion.attack += grows.attack * dead.length
+        minion.health += grows.health * dead.length
+        minion.maxHealth += grows.health * dead.length
+        events.push({ type: 'grew', player: owner, uid: minion.uid, attack: minion.attack, health: minion.health })
+      }
+    }
     for (const { owner, minion } of dead) runEffects(state, owner, minion.onDeath, undefined, events)
   }
   throw new DomainError('internal', 'board did not settle')
@@ -223,7 +274,17 @@ function playCard(state: MatchState, command: Extract<Command, { type: 'play' }>
   const keywords = [...(card.keywords ?? [])]
   side.aether -= card.cost
   side.hand.splice(command.handIndex, 1)
-  const minion: Minion = { uid: state.nextUid, cardId, attack: card.attack, health: card.health, maxHealth: card.health, exhausted: !keywords.includes('haste'), keywords, onDeath: [...(card.onDeath ?? [])] }
+  const minion: Minion = {
+    uid: state.nextUid,
+    cardId,
+    attack: card.attack,
+    health: card.health,
+    maxHealth: card.health,
+    exhausted: !keywords.includes('haste'),
+    keywords,
+    onDeath: [...(card.onDeath ?? [])],
+    ...(card.grows === undefined ? {} : { grows: card.grows }),
+  }
   state.nextUid += 1
   side.board.splice(command.position, 0, minion)
   events.push({ type: 'minion_played', player: caster, uid: minion.uid, cardId, position: command.position })

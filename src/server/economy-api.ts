@@ -31,7 +31,7 @@ async function readBody(request: Request): Promise<unknown> {
 export async function handleEconomy(request: Request, url: URL, account: Account, services: EconomyServices): Promise<Response | null> {
   const { economy, decks, content } = services
   const route = `${request.method} ${url.pathname}`
-  const pool = [...content.registry.values()]
+  const pool = [...content.registry.values()].filter((card) => card.token !== true)
 
   try {
     switch (route) {
@@ -53,7 +53,7 @@ export async function handleEconomy(request: Request, url: URL, account: Account
       case 'POST /api/craft': {
         decks.ensureStarter(account.id)
         const card = content.registry.get(url.searchParams.get('card') ?? '')
-        if (card === undefined) return json({ error: 'not_found' }, 404)
+        if (card === undefined || card.token === true) return json({ error: 'not_found' }, 404)
         const cap = card.unique ? GAME_LIMITS.maxUniqueCopies : GAME_LIMITS.maxCopies
         const crafted = economy.craft(account.id, card.id, CRAFT_COST[card.rarity], cap)
         if (!crafted.ok) return json({ error: crafted.reason }, 409)

@@ -12,6 +12,8 @@ export type Minion = {
   maxHealth: number
   exhausted: boolean
   frozen?: boolean
+  blight?: number
+  grows?: Readonly<{ attack: number, health: number }>
   keywords: KeywordId[]
   onDeath: Effect[]
 }
@@ -120,3 +122,6 @@ export type GameEvent =
   | { type: 'oath_progress', player: PlayerIndex, uid: number, progress: number }
   | { type: 'oath_fulfilled', player: PlayerIndex, uid: number }
   | { type: 'frozen', player: PlayerIndex, uid: number }
+  | { type: 'minion_summoned', player: PlayerIndex, uid: number, cardId: Id<'card'> }
+  | { type: 'blighted', player: PlayerIndex, uid: number, stacks: number }
+  | { type: 'grew', player: PlayerIndex, uid: number, attack: number, health: number }

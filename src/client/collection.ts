@@ -113,7 +113,7 @@ export class CollectionScreen {
   }
 
   private cards(): CardDefinition[] {
-    return [...this.deps.registry.values()].sort((a, b) => RARITY_IDS.indexOf(b.rarity) - RARITY_IDS.indexOf(a.rarity) || a.cost - b.cost || a.name.en.localeCompare(b.name.en))
+    return [...this.deps.registry.values()].filter((card) => card.token !== true).sort((a, b) => RARITY_IDS.indexOf(b.rarity) - RARITY_IDS.indexOf(a.rarity) || a.cost - b.cost || a.name.en.localeCompare(b.name.en))
   }
 
   private async run(task: () => Promise<void>): Promise<void> {

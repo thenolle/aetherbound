@@ -5,5 +5,6 @@ export const RULES = {
   settleRounds: 32,
   holdingSlots: 2,
   snareSlots: 3,
-  oathSlots: 1
+  oathSlots: 1,
+  maxBlight: 5,
 } as const
