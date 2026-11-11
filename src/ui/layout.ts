@@ -5,6 +5,7 @@ import type { StackNode, UiNode } from './nodes'
 export type Placed = Readonly<{ node: UiNode, rect: Rect }>
 
 export const BUTTON_HEIGHT = 40
+export const INPUT_HEIGHT = 36
 export const ROW_HEIGHT = 24
 const LINE_FACTOR = 1.4
 
@@ -30,6 +31,7 @@ export function heightOf(node: UiNode): number {
   switch (node.kind) {
     case 'label': return Math.ceil(node.size * LINE_FACTOR)
     case 'button': return BUTTON_HEIGHT
+    case 'input': return INPUT_HEIGHT
     case 'spacer':
     case 'list': return 0
     case 'row': return Math.max(0, ...node.children.map(heightOf)) + node.padding * 2

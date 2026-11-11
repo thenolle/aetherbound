@@ -2,14 +2,18 @@ import { contains } from './geometry'
 import type { Rect } from './geometry'
 import { ROW_HEIGHT, layout, listTop } from './layout'
 import type { Placed } from './layout'
-import type { ButtonNode, ListNode, UiNode } from './nodes'
+import type { ButtonNode, InputNode, ListNode, UiNode } from './nodes'
 import type { Painter, Theme } from './painter'
+import { describeSemantics } from './semantics'
+import type { Semantic } from './semantics'
 
 const BUTTON_TEXT_SIZE = 16
 const ROW_TEXT_SIZE = 14
+const INPUT_TEXT_SIZE = 16
 const WHEEL_STEP = 3
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/
 
-type Focusable = ButtonNode | ListNode
+type Focusable = ButtonNode | ListNode | InputNode
 
 export class UiHost {
   private placed: Placed[] = []
@@ -27,12 +31,32 @@ export class UiHost {
     return this.focusId
   }
 
+  semantics(): Semantic[] {
+    return describeSemantics(this.placed, this.focusId)
+  }
+
+  focusById(id: string): boolean {
+    if (!this.focusable().some((target) => target.id === id)) return false
+    this.focusId = id
+    return true
+  }
+
+  activate(id: string): boolean {
+    const target = this.focusable().find((entry) => entry.id === id)
+    if (target === undefined) return false
+    this.focusId = id
+    if (target.kind === 'button') target.onPress()
+    else if (target.kind === 'list' && target.items.length > 0) target.onActivate(target.selected)
+    return true
+  }
+
   key(key: string): boolean {
     const targets = this.focusable()
     if (targets.length === 0) return false
     const index = this.focusId === null ? -1 : targets.findIndex((target) => target.id === this.focusId)
     const current = index >= 0 ? targets[index] : undefined
     if (current?.kind === 'list' && current.items.length > 0 && this.listKey(current, key)) return true
+    if (current?.kind === 'input' && this.inputKey(current, key)) return true
     switch (key) {
       case 'ArrowDown':
       case 'ArrowRight':
@@ -61,6 +85,10 @@ export class UiHost {
       if (node.kind === 'button' && node.enabled) {
         this.focusId = node.id
         if (kind === 'down') node.onPress()
+        return true
+      }
+      if (node.kind === 'input') {
+        this.focusId = node.id
         return true
       }
       if (node.kind === 'list') {
@@ -107,7 +135,22 @@ export class UiHost {
         painter.text(node.label, rect.x + (rect.width - width) / 2, rect.y + (rect.height - BUTTON_TEXT_SIZE) / 2, BUTTON_TEXT_SIZE, node.enabled ? theme.tones.normal : theme.tones.dim)
       } else if (node.kind === 'list') {
         this.drawList(painter, theme, node, rect)
+      } else if (node.kind === 'input') {
+        this.drawInput(painter, theme, node, rect)
       }
+    }
+  }
+
+  private drawInput(painter: Painter, theme: Theme, node: InputNode, rect: Rect): void {
+    const focused = node.id === this.focusId
+    painter.fillRect(rect, theme.panel)
+    painter.strokeRect(rect, focused ? theme.focus : theme.border, focused ? 2 : 1)
+    const empty = node.value === ''
+    const textY = rect.y + (rect.height - INPUT_TEXT_SIZE) / 2
+    painter.text(empty ? node.placeholder : node.value, rect.x + 10, textY, INPUT_TEXT_SIZE, empty ? theme.tones.dim : theme.tones.normal)
+    if (focused) {
+      const width = empty ? 0 : painter.measure(node.value, INPUT_TEXT_SIZE)
+      painter.fillRect({ x: rect.x + 11 + width, y: rect.y + 8, width: 2, height: rect.height - 16 }, theme.focus)
     }
   }
 
@@ -137,6 +180,22 @@ export class UiHost {
         painter.text(item.right, rowRect.x + rowRect.width - 8 - width, textY, ROW_TEXT_SIZE, color)
       }
     }
+  }
+
+  private inputKey(input: InputNode, key: string): boolean {
+    if (key === 'Backspace') {
+      input.onChange(Array.from(input.value).slice(0, -1).join(''))
+      return true
+    }
+    if (key === 'Enter') {
+      input.onSubmit()
+      return true
+    }
+    if (key.length === 1 && !CONTROL_CHARACTERS.test(key) && Array.from(input.value).length < input.maxLength) {
+      input.onChange(input.value + key)
+      return true
+    }
+    return key.length === 1
   }
 
   private listKey(list: ListNode, key: string): boolean {
@@ -170,7 +229,7 @@ export class UiHost {
   private focusable(): Focusable[] {
     const targets: Focusable[] = []
     for (const { node } of this.placed) {
-      if ((node.kind === 'button' && node.enabled) || node.kind === 'list') targets.push(node)
+      if ((node.kind === 'button' && node.enabled) || node.kind === 'list' || node.kind === 'input') targets.push(node)
     }
     return targets
   }
