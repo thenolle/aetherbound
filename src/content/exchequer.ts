@@ -1,5 +1,6 @@
 import type { CardDefinition, HeroDefinition } from '../shared/cards'
 import { parseId } from '../shared/ids'
+import type { Id } from '../shared/ids'
 
 export const EXCHEQUER_HERO: HeroDefinition = {
   id: parseId('hero', 'auditor-maren-voss'),
@@ -26,6 +27,18 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
     attack: 1,
     health: 2,
     flavor: { en: 'Every debt has a column. Every column has a clerk.', fr: 'Chaque dette a sa colonne. Chaque colonne a son commis.' }
+  },
+  {
+    id: parseId('card', 'debt-runner'),
+    name: { en: 'Debt-Runner', fr: 'Coursier des Dettes' },
+    faction: 'exchequer',
+    family: 'bound',
+    rarity: 'common',
+    cost: 1,
+    unique: false,
+    attack: 2,
+    health: 1,
+    flavor: { en: 'Fast on the stairs, slow on the interest.', fr: "Rapide dans l'escalier, lent sur l'interet." }
   },
   {
     id: parseId('card', 'iron-clad-levy'),
@@ -66,6 +79,19 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
     flavor: { en: 'The tithe is collected even after the collector is dead.', fr: 'La dime se leve meme apres la mort du collecteur.' }
   },
   {
+    id: parseId('card', 'customs-pikeman'),
+    name: { en: 'Customs Pikeman', fr: 'Piquier des Douanes' },
+    faction: 'exchequer',
+    family: 'bound',
+    rarity: 'common',
+    cost: 3,
+    unique: false,
+    attack: 2,
+    health: 5,
+    keywords: ['shield-wall'],
+    flavor: { en: 'Declare everything. Then declare it again.', fr: 'Declarez tout. Puis declarez-le encore.' }
+  },
+  {
     id: parseId('card', 'bailiff-vane'),
     name: { en: 'Bailiff Vane', fr: 'Huissier Vane' },
     faction: 'exchequer',
@@ -89,6 +115,18 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
     health: 3,
     onPlay: [{ kind: 'damage', amount: 1, target: 'chosen-enemy-minion' }],
     flavor: { en: 'Every wall gets measured. Some get measured down.', fr: 'Chaque mur est mesure. Certains sont mesures a la baisse.' }
+  },
+  {
+    id: parseId('card', 'collector-brandt'),
+    name: { en: 'Collector Brandt', fr: 'Percepteur Brandt' },
+    faction: 'exchequer',
+    family: 'bound',
+    rarity: 'rare',
+    cost: 4,
+    unique: false,
+    attack: 3,
+    health: 5,
+    flavor: { en: 'Brandt never raises his voice. He raises the interest.', fr: "Brandt ne hausse jamais la voix. Il hausse l'interet." }
   },
   {
     id: parseId('card', 'seal-bearer'),
@@ -115,6 +153,18 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
     flavor: { en: 'Clause nine: no exceptions for the dead.', fr: 'Clause neuf : aucune exception pour les morts.' }
   },
   {
+    id: parseId('card', 'chain-marshal'),
+    name: { en: 'Chain-Marshal', fr: 'Marechal des Chaines' },
+    faction: 'exchequer',
+    family: 'bound',
+    rarity: 'epic',
+    cost: 6,
+    unique: false,
+    attack: 6,
+    health: 7,
+    flavor: { en: 'The last audit is the loudest.', fr: 'Le dernier audit est le plus bruyant.' }
+  },
+  {
     id: parseId('card', 'assessors-pike'),
     name: { en: "Assessor's Pike", fr: "Pique de l'Assesseur" },
     faction: 'exchequer',
@@ -138,6 +188,17 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
     flavor: { en: "Item four: the debtor's chattels, forfeit.", fr: 'Article quatre : les biens du debiteur sont saisis.' }
   },
   {
+    id: parseId('card', 'writ-of-levy'),
+    name: { en: 'Writ of Levy', fr: 'Mandat de Levee' },
+    faction: 'exchequer',
+    family: 'writ',
+    rarity: 'common',
+    cost: 3,
+    unique: false,
+    effects: [{ kind: 'draw', count: 2 }],
+    flavor: { en: 'Take what is owed. Then take a little more.', fr: 'Prenez ce qui est du. Puis un peu plus.' }
+  },
+  {
     id: parseId('card', 'audit-of-arrears'),
     name: { en: 'Audit of Arrears', fr: 'Audit des Arrieres' },
     faction: 'exchequer',
@@ -149,3 +210,7 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
     flavor: { en: 'The ledger is read aloud. Nobody enjoys it.', fr: "On lit le registre a voix haute. Personne n'aime ca." }
   }
 ]
+
+export const EXCHEQUER_DECK: readonly Id<'card'>[] = EXCHEQUER_CARDS
+  .filter((card) => !card.unique)
+  .flatMap((card) => [card.id, card.id])
