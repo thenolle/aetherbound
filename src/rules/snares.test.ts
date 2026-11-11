@@ -107,7 +107,8 @@ describe('snares', () => {
     state.players[0].snares = [{ uid: 9, cardId: cid(1) }]
     const foeView = projectState(state, 1)
     expect(foeView.opponent.snareCount).toBe(1)
-    expect(JSON.stringify(foeView)).not.toContain('"snares"')
+    expect(JSON.stringify(foeView.opponent)).not.toContain('"snares"')
+    expect(JSON.stringify(foeView.opponent)).not.toContain(cid(1))
     expect(projectState(state, 0).self.snares).toEqual([{ uid: 9, cardId: cid(1) }])
 
     expect(() => createRegistry([makeCard(1, { ...snare, effects: [{ kind: 'draw', count: 1 }] })])).toThrow(DomainError)
