@@ -25,7 +25,7 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
   },
   {
     id: parseId('card', 'iron-clad-levy'),
-    name: { en: 'Iron-Clad Levy', fr: 'Levée Cuirassée' },
+    name: { en: 'Iron-Clad Levy', fr: 'Levee Cuirassee' },
     faction: 'exchequer',
     family: 'bound',
     rarity: 'common',
@@ -33,11 +33,12 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
     unique: false,
     attack: 1,
     health: 4,
-    flavor: { en: 'Sworn levies do not retreat. They are not paid to.', fr: 'Les levées jurées ne reculent pas. On ne les paie pas pour ça.' }
+    keywords: ['shield-wall'],
+    flavor: { en: 'Sworn levies do not retreat. They are not paid to.', fr: 'Les levees jurees ne reculent pas. On ne les paie pas pour ca.' }
   },
   {
     id: parseId('card', 'toll-warden'),
-    name: { en: 'Toll-Warden', fr: 'Gardien de Péage' },
+    name: { en: 'Toll-Warden', fr: 'Gardien de Peage' },
     faction: 'exchequer',
     family: 'bound',
     rarity: 'common',
@@ -57,7 +58,7 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
     unique: false,
     attack: 3,
     health: 3,
-    flavor: { en: 'Paid in full, or paid in kind.', fr: 'Payé en totalité, ou payé en nature.' }
+    flavor: { en: 'Paid in full, or paid in kind.', fr: 'Paye en totalite, ou paye en nature.' }
   },
   {
     id: parseId('card', 'seal-bearer'),
@@ -69,7 +70,7 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
     unique: false,
     attack: 4,
     health: 4,
-    flavor: { en: 'The wax is still warm. So is the warrant.', fr: 'La cire est encore tiède. Le mandat aussi.' }
+    flavor: { en: 'The wax is still warm. So is the warrant.', fr: 'La cire est encore tiede. Le mandat aussi.' }
   },
   {
     id: parseId('card', 'warden-mireille'),
@@ -82,5 +83,27 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
     attack: 5,
     health: 6,
     flavor: { en: 'Clause nine: no exceptions for the dead.', fr: 'Clause neuf : aucune exception pour les morts.' }
+  },
+  {
+    id: parseId('card', 'writ-of-seizure'),
+    name: { en: 'Writ of Seizure', fr: 'Mandat de Saisie' },
+    faction: 'exchequer',
+    family: 'writ',
+    rarity: 'common',
+    cost: 2,
+    unique: false,
+    effects: [{ kind: 'damage', amount: 3, target: 'chosen-enemy-minion' }],
+    flavor: { en: "Item four: the debtor's chattels, forfeit.", fr: 'Article quatre : les biens du debiteur sont saisis.' }
+  },
+  {
+    id: parseId('card', 'audit-of-arrears'),
+    name: { en: 'Audit of Arrears', fr: "Audit des Arrieres" },
+    faction: 'exchequer',
+    family: 'writ',
+    rarity: 'rare',
+    cost: 4,
+    unique: false,
+    effects: [{ kind: 'damage', amount: 2, target: 'all-enemy-minions' }],
+    flavor: { en: 'The ledger is read aloud. Nobody enjoys it.', fr: "On lit le registre a voix haute. Personne n'aime ca." }
   }
 ]

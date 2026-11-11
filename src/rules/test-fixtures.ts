@@ -16,7 +16,7 @@ export function makeCard(n: number, overrides: Partial<CardDefinition> = {}): Ca
   const { cost, attack, health } = stats(n)
   return {
     id: cid(n),
-    name: { en: `Test Card ${n}`, fr: `Carte d’essai ${n}` },
+    name: { en: `Test Card ${n}`, fr: `Carte d'essai ${n}` },
     faction: 'neutral',
     family: 'bound',
     rarity: 'common',
@@ -24,7 +24,7 @@ export function makeCard(n: number, overrides: Partial<CardDefinition> = {}): Ca
     unique: false,
     attack,
     health,
-    flavor: { en: 'Fixture.', fr: 'Donnée d’essai.' },
+    flavor: { en: 'Fixture.', fr: "Donnee d'essai." },
     ...overrides
   }
 }
@@ -35,11 +35,11 @@ export const fixtureRegistry = createRegistry(fixtureCards)
 
 export const fixtureHero: HeroDefinition = {
   id: parseId('hero', 'test-hero'),
-  name: { en: 'Test Hero', fr: 'Héros d’essai' },
+  name: { en: 'Test Hero', fr: "Heros d'essai" },
   title: { en: 'Tester', fr: 'Testeur' },
   faction: 'exchequer',
   health: 30,
-  ability: { name: { en: 'Test Ability', fr: 'Capacité d’essai' }, cost: 2 }
+  ability: { name: { en: 'Test Ability', fr: "Capacite d'essai" }, cost: 2 }
 }
 
 export const fixtureDeck: readonly Id<'card'>[] = fixtureCards.flatMap((card) => [card.id, card.id])
