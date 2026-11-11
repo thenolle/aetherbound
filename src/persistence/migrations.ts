@@ -73,5 +73,64 @@ ALTER TABLE matches ADD COLUMN account_1 TEXT REFERENCES accounts (id) ON DELETE
 CREATE INDEX matches_account_0 ON matches (account_0, created_at);
 CREATE INDEX matches_account_1 ON matches (account_1, created_at);
 `
-  }
+  },
+  {
+    version: 4,
+    name: 'collection, wallets, decks, pack openings and ratings',
+    sql: `
+CREATE TABLE collection (
+  account_id TEXT NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
+  card_id TEXT NOT NULL,
+  copies INTEGER NOT NULL CHECK (copies > 0),
+  PRIMARY KEY (account_id, card_id)
+) WITHOUT ROWID;
+CREATE TABLE grants (
+  account_id TEXT NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
+  grant_key TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (account_id, grant_key)
+) WITHOUT ROWID;
+CREATE TABLE wallets (
+  account_id TEXT PRIMARY KEY REFERENCES accounts (id) ON DELETE CASCADE,
+  packs INTEGER NOT NULL DEFAULT 0 CHECK (packs >= 0),
+  dust INTEGER NOT NULL DEFAULT 0 CHECK (dust >= 0)
+);
+CREATE TABLE decks (
+  id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  hero_id TEXT NOT NULL,
+  cards TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX decks_account ON decks (account_id);
+ALTER TABLE accounts ADD COLUMN active_deck_id TEXT;
+CREATE TABLE pack_openings (
+  id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
+  table_version INTEGER NOT NULL,
+  seed INTEGER NOT NULL,
+  cards TEXT NOT NULL,
+  dust_gained INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX pack_openings_account ON pack_openings (account_id, created_at);
+CREATE TABLE ratings (
+  account_id TEXT PRIMARY KEY REFERENCES accounts (id) ON DELETE CASCADE,
+  mmr REAL NOT NULL,
+  games INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE rating_updates (
+  match_id TEXT PRIMARY KEY REFERENCES matches (id) ON DELETE CASCADE,
+  winner_id TEXT NOT NULL,
+  loser_id TEXT NOT NULL,
+  winner_before REAL NOT NULL,
+  winner_after REAL NOT NULL,
+  loser_before REAL NOT NULL,
+  loser_after REAL NOT NULL,
+  created_at INTEGER NOT NULL
+);
+`
+  },
 ]
