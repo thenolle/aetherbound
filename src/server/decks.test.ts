@@ -12,6 +12,7 @@ const content = { registry: fixtureRegistry, heroes: new Map([[fixtureHero.id, f
 let economy: EconomyStore
 let alice: string
 let bob: string
+let carol: string
 
 beforeEach(() => {
   const db = openDatabase(':memory:')
@@ -20,6 +21,7 @@ beforeEach(() => {
   economy = new EconomyStore(db, () => 1000)
   alice = accounts.upsertGoogleAccount('alice', 'Alice').id
   bob = accounts.upsertGoogleAccount('bob', 'Bob').id
+  carol = accounts.upsertGoogleAccount('carol', 'Carol').id
 })
 
 const service = (deck = fixtureDeck) => new DeckService(economy, content, { hero: fixtureHero, deck })
@@ -51,7 +53,7 @@ describe('DeckService', () => {
     expect(code(() => decks.save(alice, { ...input(), cards: 'not a list' }))).toBe('deck_invalid')
     expect(code(() => decks.save(alice, { ...input(), name: '   ' }))).toBe('invalid_command')
     expect(code(() => decks.save(alice, { ...input(), id: 'nope' }))).toBe('invalid_command')
-    expect(code(() => service(fixtureDeck.slice(0, 24)).save(bob, input()))).toBe('deck_invalid')
+    expect(code(() => service(fixtureDeck.slice(0, 24)).save(carol, input()))).toBe('deck_invalid')
     const stolen = service().save(alice, input()).id
     expect(code(() => decks.save(bob, { ...input(), id: stolen }))).toBe('invalid_command')
   })
