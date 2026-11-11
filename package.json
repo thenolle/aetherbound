@@ -1,3 +1,19 @@
 {
-  "name": "aetherbound"
+  "name": "aetherbound",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Aetherbound: Shattered Concord - original 3D collectible card battler",
+  "scripts": {
+    "dev": "bun --watch src/server/main.ts",
+    "start": "bun run src/server/main.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "deps:check": "bun run src/tools/check-deps.ts",
+    "verify": "bun run deps:check && bun run typecheck && bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.4",
+    "typescript": "^7.0.2"
+  }
 }
