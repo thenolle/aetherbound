@@ -1,15 +1,11 @@
 import type { AttackTarget, Command } from '../rules/types'
-import { ByteReader, ByteWriter } from './bytes'
+import { ByteWriter } from './bytes'
 import { ProtocolError } from './errors'
+import { FRAME, readFrame, writeFrame } from './frame'
 import { decodeFields, encodeFields } from './schema'
 import type { MessageSchema, WireValues } from './schema'
 
-export const PROTOCOL = {
-  magic: 0xae,
-  version: 1,
-  maxCommandPayload: 256,
-  maxHeaderBytes: 32
-} as const
+export const PROTOCOL = { ...FRAME, maxCommandPayload: 256 } as const
 
 export const COMMAND_SCHEMAS = {
   play: { id: 1, fields: [['commandId', 'string'], ['handIndex', 'uint'], ['position', 'uint'], ['targetUid', 'optuint']] },
@@ -117,37 +113,14 @@ export function encodeCommandFrame(sequence: number, commandId: string, command:
   const schema = COMMAND_SCHEMAS[command.type]
   const body = new ByteWriter(PROTOCOL.maxCommandPayload)
   encodeFields(body, schema, toValues(commandId, command))
-  const payload = body.finish()
-
-  return new ByteWriter(PROTOCOL.maxCommandPayload + PROTOCOL.maxHeaderBytes)
-    .u8(PROTOCOL.magic)
-    .u8(PROTOCOL.version)
-    .u8(0)
-    .varuint(schema.id)
-    .varuint(sequence)
-    .varuint(payload.length)
-    .raw(payload)
-    .finish()
+  return writeFrame(schema.id, sequence, body.finish(), PROTOCOL.maxCommandPayload)
 }
 
 export function decodeCommandFrame(data: Uint8Array): DecodedCommand {
-  if (data.length > PROTOCOL.maxCommandPayload + PROTOCOL.maxHeaderBytes) {
-    throw new ProtocolError('too_large', 'frame exceeds the maximum size')
-  }
-  const reader = new ByteReader(data)
-  if (reader.u8() !== PROTOCOL.magic) throw malformed('bad magic')
-  if (reader.u8() !== PROTOCOL.version) throw new ProtocolError('unsupported', 'unsupported protocol version')
-  if (reader.u8() !== 0) throw new ProtocolError('unsupported', 'unsupported flags')
-  const entry = SCHEMA_BY_ID.get(reader.varuint())
+  const frame = readFrame(data, PROTOCOL.maxCommandPayload, (id) => SCHEMA_BY_ID.has(id))
+  const entry = SCHEMA_BY_ID.get(frame.id)
   if (entry === undefined) throw new ProtocolError('unsupported', 'unknown message id')
-  const sequence = reader.varuint()
-  const length = reader.varuint()
-  if (length > PROTOCOL.maxCommandPayload) throw new ProtocolError('too_large', 'payload exceeds the maximum size')
-  if (length > reader.remaining) throw new ProtocolError('truncated', 'payload is shorter than declared')
-  if (length < reader.remaining) throw malformed('trailing bytes after payload')
-
-  const body = new ByteReader(reader.raw(length))
-  const values = decodeFields(body, entry.schema)
-  body.expectEnd()
-  return { sequence, commandId: requireString(values, 'commandId'), command: fromValues(entry.type, values) }
+  const values = decodeFields(frame.body, entry.schema)
+  frame.body.expectEnd()
+  return { sequence: frame.sequence, commandId: requireString(values, 'commandId'), command: fromValues(entry.type, values) }
 }
