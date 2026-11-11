@@ -1,4 +1,4 @@
-import type { MatchRecorder } from '../persistence/match-store'
+import type { MatchMode, MatchRecorder } from '../persistence/match-store'
 import type { MatchSetup } from '../rules/engine'
 import type { PlayerIndex } from '../rules/types'
 import { DEFAULT_ROOM_OPTIONS, Room } from './room'
@@ -33,17 +33,21 @@ export class RoomRegistry {
   private readonly current = new Map<string, Assignment>()
   private readonly all = new Set<OpenRoom>()
   private readonly recorder: MatchRecorder | null
+  private readonly onRankedResult: ((matchId: string, winnerId: string, loserId: string) => void) | null
 
-  constructor(recorder: MatchRecorder | null = null) {
+  constructor(recorder: MatchRecorder | null = null, onRankedResult: ((matchId: string, winnerId: string, loserId: string) => void) | null = null) {
     this.recorder = recorder
+    this.onRankedResult = onRankedResult
   }
 
-  open(
-    setup: MatchSetup,
-    options: RoomOptions = DEFAULT_ROOM_OPTIONS,
-    accounts: readonly [string | null, string | null] = [null, null]
-  ): OpenRoom {
-    const persistence = this.recorder === null ? null : { matchId: crypto.randomUUID(), recorder: this.recorder, accounts }
+  open(setup: MatchSetup, options: RoomOptions = DEFAULT_ROOM_OPTIONS, accounts: readonly [string | null, string | null] = [null, null], mode: MatchMode = 'casual'): OpenRoom {
+    const persistence = this.recorder === null ? null : {
+      matchId: crypto.randomUUID(),
+      recorder: this.recorder,
+      accounts,
+      mode,
+      onFinished: mode === 'ranked' ? (result: { matchId: string, winner: PlayerIndex }) => this.rate(result.matchId, accounts, result.winner) : undefined
+    }
     const room = new Room(setup, options, persistence)
     const entry: OpenRoom = { room, tokens: [randomToken(), randomToken()] }
     this.bindings.set(entry.tokens[0], { room, seat: 0, accountId: accounts[0] })
@@ -52,11 +56,9 @@ export class RoomRegistry {
     return entry
   }
 
-  openMatch(accounts: readonly [string, string], makeSetup: () => MatchSetup, options: RoomOptions = DEFAULT_ROOM_OPTIONS): void {
-    const entry = this.open(makeSetup(), options, accounts)
-    for (const seat of [0, 1] as const) {
-      this.current.set(accounts[seat], { room: entry.room, result: { seat, token: entry.tokens[seat] } })
-    }
+  openMatch(accounts: readonly [string, string], makeSetup: () => MatchSetup, options: RoomOptions = DEFAULT_ROOM_OPTIONS, mode: MatchMode = 'casual'): void {
+    const entry = this.open(makeSetup(), options, accounts, mode)
+    for (const seat of [0, 1] as const) this.current.set(accounts[seat], { room: entry.room, result: { seat, token: entry.tokens[seat] } })
   }
 
   currentFor(accountId: string): JoinResult | null {
@@ -103,5 +105,11 @@ export class RoomRegistry {
     for (const [accountId, assignment] of this.current) {
       if (assignment.room === entry.room) this.current.delete(accountId)
     }
+  }
+
+  private rate(matchId: string, accounts: readonly [string | null, string | null], winner: PlayerIndex): void {
+    const winnerId = accounts[winner]
+    const loserId = accounts[winner === 0 ? 1 : 0]
+    if (winnerId !== null && loserId !== null && this.onRankedResult !== null) this.onRankedResult(matchId, winnerId, loserId)
   }
 }

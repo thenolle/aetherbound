@@ -4,8 +4,14 @@ import type { Matchmaker } from './matchmaker'
 import { empty, json, originAllowed } from './origin'
 import { handleEconomy } from './economy-api'
 import type { EconomyServices } from './economy-api'
+import type { SqliteRatingStore } from '../persistence/rating-store'
 
-export type ApiServices = Readonly<{ matchmaker: Matchmaker, history: HistoryService | null, economy?: EconomyServices }>
+export type ApiServices = Readonly<{
+  matchmaker: Matchmaker
+  history: HistoryService | null
+  economy?: EconomyServices
+  ratings?: SqliteRatingStore
+}>
 
 const REPLAY_PATH = /^\/api\/replay\/([0-9a-f-]{36})$/
 
@@ -15,7 +21,12 @@ export async function handleApi(request: Request, url: URL, auth: Auth, services
   const mutating = request.method !== 'GET' && request.method !== 'HEAD'
   if (mutating && !originAllowed(request, url)) return json({ error: 'forbidden_origin' }, 403)
   const route = `${request.method} ${url.pathname}`
-  if (route === 'POST /api/queue/join') return json(services.matchmaker.join(account.id), 200)
+  if (route === 'POST /api/queue/join') {
+    const mode = url.searchParams.get('mode') ?? 'casual'
+    if (mode !== 'casual' && mode !== 'ranked') return json({ error: 'bad_request' }, 400)
+    return json(services.matchmaker.join(account.id, mode), 200)
+  }
+  if (route === 'GET /api/rank' && services.ratings !== undefined) return json(services.ratings.rankFor(account.id), 200)
   if (route === 'GET /api/queue/status') return json(services.matchmaker.status(account.id), 200)
   if (route === 'POST /api/queue/leave') {
     services.matchmaker.leave(account.id)

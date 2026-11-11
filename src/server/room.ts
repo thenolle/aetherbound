@@ -3,7 +3,7 @@ import { ProtocolError } from '../protocol/errors'
 import { MAX_EVENTS_PER_MESSAGE, encodeServerFrame } from '../protocol/server'
 import type { ServerMessage } from '../protocol/server'
 import { describeMatch } from '../persistence/match-store'
-import type { MatchRecorder } from '../persistence/match-store'
+import type { MatchMode, MatchRecorder } from '../persistence/match-store'
 import { RULES } from '../rules/constants'
 import type { MatchSetup } from '../rules/engine'
 import { MatchSession } from '../rules/session'
@@ -28,6 +28,8 @@ export type RoomPersistence = Readonly<{
   matchId: string
   recorder: MatchRecorder
   accounts?: readonly [string | null, string | null]
+  mode?: MatchMode
+  onFinished?: (result: { matchId: string, winner: PlayerIndex }) => void
 }>
 
 export const DEFAULT_ROOM_OPTIONS: RoomOptions = {
@@ -55,13 +57,14 @@ export class Room {
   private cancelTimer: (() => void) | null = null
   private persisted = 0
   private failed = false
+  private finished = false
 
   constructor(setup: MatchSetup, options: RoomOptions = DEFAULT_ROOM_OPTIONS, persistence: RoomPersistence | null = null) {
     this.session = new MatchSession(setup)
     this.options = options
     this.persistence = persistence
     this.buckets = [this.newBucket(), this.newBucket()]
-    if (persistence !== null) persistence.recorder.begin(describeMatch(persistence.matchId, setup, options.now(), persistence.accounts))
+    if (persistence !== null) persistence.recorder.begin(describeMatch(persistence.matchId, setup, options.now(), persistence.accounts, persistence.mode))
   }
 
   get winner(): PlayerIndex | null {
@@ -89,7 +92,6 @@ export class Room {
 
   handleFrame(seat: PlayerIndex, link: SeatLink, data: Uint8Array): void {
     if (this.links[seat] !== link || this.failed) return
-
     let decoded
     try {
       decoded = decodeCommandFrame(data)
@@ -100,7 +102,6 @@ export class Room {
       }
       throw error
     }
-
     if (!this.buckets[seat].take()) {
       this.reject(seat, decoded.sequence, 'rate_limited', 'too many commands')
       return
@@ -110,7 +111,6 @@ export class Room {
       return
     }
     this.inbound[seat] = decoded.sequence
-
     const result = this.session.submit(seat, decoded.commandId, decoded.command)
     if (!result.ok) {
       this.reject(seat, decoded.sequence, result.code, result.message)
@@ -150,10 +150,22 @@ export class Room {
       const outcome = winner === null ? null : { winner, endedAt: this.options.now() }
       persistence.recorder.append(persistence.matchId, this.persisted, fresh, outcome)
       this.persisted += fresh.length
+      this.notifyFinished(persistence)
       return true
     } catch (error) {
       console.error('match persistence failed', error)
       return false
+    }
+  }
+
+  private notifyFinished(persistence: RoomPersistence): void {
+    const winner = this.session.winner
+    if (winner === null || this.finished) return
+    this.finished = true
+    try {
+      persistence.onFinished?.({ matchId: persistence.matchId, winner })
+    } catch (error) {
+      console.error('post-match hook failed', error)
     }
   }
 
@@ -192,9 +204,7 @@ export class Room {
     for (const seat of SEATS) {
       if (this.links[seat] === null) continue
       const events = this.session.eventsFor(seat, this.delivered[seat])
-      for (let start = 0; start < events.length; start += MAX_EVENTS_PER_MESSAGE) {
-        this.send(seat, { type: 'events', events: events.slice(start, start + MAX_EVENTS_PER_MESSAGE) })
-      }
+      for (let start = 0; start < events.length; start += MAX_EVENTS_PER_MESSAGE) this.send(seat, { type: 'events', events: events.slice(start, start + MAX_EVENTS_PER_MESSAGE) })
       this.sendSnapshot(seat)
     }
   }
