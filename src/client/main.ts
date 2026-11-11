@@ -17,13 +17,15 @@ import { GameSocket } from './net'
 import { BRINE_LOCK_CARDS, BRINE_LOCK_HERO } from '../content/brine-lock'
 import { EXCHEQUER_CARDS, EXCHEQUER_HERO } from '../content/exchequer'
 import { DeckBuilder } from './decks'
+import { A11yBridge } from './a11y'
+import { CollectionScreen } from './collection'
 
 const registry = createRegistry([...EXCHEQUER_CARDS, ...BRINE_LOCK_CARDS])
 const NOTE_LIMIT = 8
 const POLL_MS = 1500
 const HANDLED_KEYS = new Set(['ArrowLeft', 'ArrowRight'])
 
-type Screen = 'signin' | 'menu' | 'decks' | 'game' | 'replay'
+type Screen = 'signin' | 'menu' | 'decks' | 'collection' | 'game' | 'replay'
 
 async function readJson(response: Response): Promise<unknown> {
   try { return await response.json() } catch { return null }
@@ -55,12 +57,20 @@ async function start(): Promise<void> {
   const hud = new HudRenderer(presenter)
   const painter = new CanvasPainter(presenter.pen)
   const host = new UiHost()
+  const a11y = new A11yBridge({
+    activate: (id) => {
+      if (host.activate(id)) render()
+    },
+    focus: (id) => {
+      if (host.focusById(id)) render()
+    }
+  })
   let screen: Screen = 'signin'
   let menu: MenuController | null = null
   let builder: DeckBuilder | null = null
-  const getMenu = (): MenuController | null => menu
-  const getBuilder = (): DeckBuilder | null => builder
-  const onUiScreen = (): boolean => screen === 'signin' || screen === 'menu' || screen === 'decks'
+  let collection: CollectionScreen | null = null
+  const getCollection = (): CollectionScreen | null => collection
+  const onUiScreen = (): boolean => screen === 'signin' || screen === 'menu' || screen === 'decks' || screen === 'collection'
   let view: MatchView | null = null
   let selection: Selection = INITIAL_SELECTION
   let status = 'checking your session'
@@ -73,6 +83,7 @@ async function start(): Promise<void> {
   let socket: GameSocket | null = null
   const note = (text: string): void => {
     if (text === '') return
+    a11y.announce(text)
     notes.push(text)
     if (notes.length > NOTE_LIMIT) notes.shift()
   }
@@ -83,17 +94,27 @@ async function start(): Promise<void> {
     spacer(),
     ...notes.map((line) => label(line, { tone: 'warn' }))
   ], { padding: 28, gap: 12 })
+  const toMenu = (): void => {
+    screen = 'menu'
+    render()
+    void menu?.refresh()
+  }
   const render = (): void => {
     if (onUiScreen()) {
       const { width, height } = presenter.frame()
       let tree: UiNode = signInTree()
-      if (screen === 'menu' && getMenu() !== null) tree = getMenu()!.build()
-      if (screen === 'decks' && getBuilder() !== null) tree = getBuilder()!.build()
-      host.setTree(screen === 'decks' ? tree : centered(tree), { x: 0, y: 0, width, height })
+      if (screen === 'menu' && menu !== null) tree = menu.build()
+      if (screen === 'decks' && builder !== null) tree = builder.build()
+      const currentCollection = getCollection()
+      if (screen === 'collection' && currentCollection !== null) tree = currentCollection.build()
+      const wide = screen === 'decks' || screen === 'collection'
+      host.setTree(wide ? tree : centered(tree), { x: 0, y: 0, width, height })
       host.draw(painter, DEFAULT_THEME)
       presenter.present()
+      a11y.update(host.semantics())
       return
     }
+    a11y.update([])
     hud.draw(buildHud({ status, view, selection, notes, registry }))
   }
   const signOut = async (): Promise<void> => {
@@ -193,9 +214,10 @@ async function start(): Promise<void> {
     }
   }, { passive: false })
   window.addEventListener('keydown', (event) => {
+    if (event.ctrlKey || event.metaKey || event.altKey) return
     if (onUiScreen()) {
-      if (screen === 'decks' && event.key === 'Escape') {
-        getBuilder()?.back()
+      if ((screen === 'decks' || screen === 'collection') && event.key === 'Escape') {
+        toMenu()
         return
       }
       if (host.key(event.key)) {
@@ -274,18 +296,21 @@ async function start(): Promise<void> {
       registry,
       heroes: [EXCHEQUER_HERO, BRINE_LOCK_HERO],
       onChange: render,
-      onBack: () => {
-        screen = 'menu'
-        render()
-        void getMenu()?.refresh()
-      }
+      onBack: toMenu
     })
     builder = deckBuilder
     screen = 'decks'
     render()
     await deckBuilder.load()
   }
-  menu = new MenuController(api, playerName, { play: (mode) => void beginQueue(mode, playerName), openDecks: () => void openDecks(), signOut: () => void signOut() }, render)
+  const openCollection = async (): Promise<void> => {
+    const collectionScreen = new CollectionScreen({ api, registry, onChange: render, onBack: toMenu })
+    collection = collectionScreen
+    screen = 'collection'
+    render()
+    await collectionScreen.load()
+  }
+  menu = new MenuController(api, playerName, { play: (mode) => void beginQueue(mode, playerName), openDecks: () => void openDecks(), openCollection: () => void openCollection(), signOut: () => void signOut() }, render)
   screen = 'menu'
   render()
   await menu.refresh()
