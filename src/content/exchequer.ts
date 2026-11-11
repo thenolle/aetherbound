@@ -247,7 +247,23 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
   }
 ]
 
-const STARTER_PICKS: readonly Id<'card'>[] = EXCHEQUER_CARDS.map((card) => card.id)
+const STARTER_PICKS = [
+  'tally-clerk',
+  'iron-clad-levy',
+  'toll-warden',
+  'distraint-notice',
+  'customs-pikeman',
+  'bailiff-vane',
+  'surveyor-pell',
+  'collector-brandt',
+  'oath-of-collection',
+  'chain-marshal',
+  'assessors-pike',
+  'toll-bridge',
+  'writ-of-seizure',
+  'writ-of-levy',
+  'audit-of-arrears'
+]
 
 export const EXCHEQUER_DECK: readonly Id<'card'>[] = STARTER_PICKS.flatMap((pick) => {
   const id = parseId('card', pick)
