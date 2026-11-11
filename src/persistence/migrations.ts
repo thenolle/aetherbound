@@ -165,4 +165,35 @@ CREATE TABLE match_rewards (
 CREATE INDEX match_rewards_day ON match_rewards (account_id, day);
 `
   },
+  {
+    version: 7,
+    name: 'seasons and integrity flags',
+    sql: `
+CREATE TABLE seasons (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  started_at INTEGER NOT NULL,
+  ended_at INTEGER
+);
+CREATE TABLE season_results (
+  season_id INTEGER NOT NULL REFERENCES seasons (id),
+  account_id TEXT NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
+  final_mmr REAL NOT NULL,
+  games INTEGER NOT NULL,
+  league TEXT NOT NULL,
+  division INTEGER NOT NULL,
+  PRIMARY KEY (season_id, account_id)
+) WITHOUT ROWID;
+CREATE TABLE integrity_flags (
+  id TEXT PRIMARY KEY,
+  match_id TEXT NOT NULL REFERENCES matches (id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  detail TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  reviewed_at INTEGER,
+  UNIQUE (match_id, kind)
+);
+CREATE INDEX integrity_flags_open ON integrity_flags (reviewed_at, created_at);
+`
+  },
 ]
