@@ -16,6 +16,10 @@ export type LogEntry =
   | Readonly<{ kind: 'timeout', events: readonly SequencedEvent[] }>
   | Readonly<{ kind: 'command', actor: PlayerIndex, commandId: string, command: Command, events: readonly SequencedEvent[] }>
 
+export type InputEntry =
+  | Readonly<{ kind: 'timeout' }>
+  | Readonly<{ kind: 'command', actor: PlayerIndex, commandId: string, command: Command }>
+
 export type SubmitResult =
   | Readonly<{ ok: true, duplicate: boolean, lastSeq: number }>
   | Readonly<{ ok: false, code: ErrorCode, message: string }>
@@ -30,6 +34,7 @@ export class MatchSession {
   private seq = 0
   private readonly registry: CardRegistry
   private readonly log: LogEntry[] = []
+  private readonly inputs: InputEntry[] = []
   private readonly seen: [Map<string, number>, Map<string, number>] = [new Map(), new Map()]
 
   constructor(setup: MatchSetup) {
@@ -40,12 +45,18 @@ export class MatchSession {
   }
 
   static replay(setup: MatchSetup, entries: readonly LogEntry[]): MatchSession {
+    const inputs = entries.flatMap((entry): InputEntry[] => {
+      if (entry.kind === 'start') return []
+      if (entry.kind === 'timeout') return [{ kind: 'timeout' }]
+      return [{ kind: 'command', actor: entry.actor, commandId: entry.commandId, command: entry.command }]
+    })
+    return MatchSession.replayInputs(setup, inputs)
+  }
+
+  static replayInputs(setup: MatchSetup, inputs: readonly InputEntry[]): MatchSession {
     const session = new MatchSession(setup)
-    for (const entry of entries) {
-      if (entry.kind === 'start') continue
-      const result = entry.kind === 'timeout'
-        ? session.timeout()
-        : session.submit(entry.actor, entry.commandId, entry.command)
+    for (const input of inputs) {
+      const result = input.kind === 'timeout' ? session.timeout() : session.submit(input.actor, input.commandId, input.command)
       if (!result.ok) throw new DomainError('internal', `replay diverged: ${result.message}`)
     }
     return session
@@ -57,6 +68,14 @@ export class MatchSession {
 
   get winner(): PlayerIndex | null {
     return this.state.winner
+  }
+
+  get inputCount(): number {
+    return this.inputs.length
+  }
+
+  inputsFrom(start: number): readonly InputEntry[] {
+    return this.inputs.slice(start)
   }
 
   inspect(): MatchState {
@@ -106,7 +125,13 @@ export class MatchSession {
     try {
       const result = run()
       this.state = result.state
-      this.log.push(describe(this.sequence(result.events)))
+      const entry = describe(this.sequence(result.events))
+      this.log.push(entry)
+      if (entry.kind === 'command') {
+        this.inputs.push({ kind: 'command', actor: entry.actor, commandId: entry.commandId, command: entry.command })
+      } else if (entry.kind === 'timeout') {
+        this.inputs.push({ kind: 'timeout' })
+      }
       return { ok: true, duplicate: false, lastSeq: this.seq }
     } catch (error) {
       if (error instanceof DomainError) {
