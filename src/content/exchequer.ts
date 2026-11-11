@@ -177,6 +177,18 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
     flavor: { en: 'Measured twice, driven once.', fr: 'Mesuree deux fois, plantee une fois.' }
   },
   {
+    id: parseId('card', 'toll-bridge'),
+    name: { en: 'Toll-Bridge', fr: 'Pont a Peage' },
+    faction: 'exchequer',
+    family: 'holding',
+    rarity: 'rare',
+    cost: 3,
+    unique: false,
+    durability: 3,
+    effects: [{ kind: 'tariff', amount: 1 }],
+    flavor: { en: 'Every crossing is logged. Every log is billed.', fr: 'Chaque passage est consigne. Chaque consignation est facturee.' }
+  },
+  {
     id: parseId('card', 'writ-of-seizure'),
     name: { en: 'Writ of Seizure', fr: 'Mandat de Saisie' },
     faction: 'exchequer',
@@ -211,6 +223,25 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
   }
 ]
 
-export const EXCHEQUER_DECK: readonly Id<'card'>[] = EXCHEQUER_CARDS
-  .filter((card) => !card.unique)
-  .flatMap((card) => [card.id, card.id])
+const STARTER_PICKS = [
+  'tally-clerk',
+  'iron-clad-levy',
+  'toll-warden',
+  'tithe-hound',
+  'customs-pikeman',
+  'bailiff-vane',
+  'surveyor-pell',
+  'collector-brandt',
+  'seal-bearer',
+  'chain-marshal',
+  'assessors-pike',
+  'toll-bridge',
+  'writ-of-seizure',
+  'writ-of-levy',
+  'audit-of-arrears'
+]
+
+export const EXCHEQUER_DECK: readonly Id<'card'>[] = STARTER_PICKS.flatMap((pick) => {
+  const id = parseId('card', pick)
+  return [id, id]
+})

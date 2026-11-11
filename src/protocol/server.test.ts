@@ -31,7 +31,10 @@ const ALL_EVENTS: readonly ViewEvent[] = [
   { type: 'taxed', player: 1, amount: 1 },
   { type: 'minion_died', player: 0, uid: 4 },
   { type: 'surrendered', player: 1 },
-  { type: 'game_over', winner: 0 }
+  { type: 'game_over', winner: 0 },
+  { type: 'holding_placed', player: 0, uid: 6, cardId: cid(6), charges: 3 },
+  { type: 'holding_activated', player: 1, uid: 6 },
+  { type: 'holding_destroyed', player: 1, uid: 6 },
 ]
 
 const eventsMessage: ServerMessage = {
@@ -65,6 +68,8 @@ function richState() {
   ]
   state.players[1].heroHealth = -3
   state.winner = 0
+  state.players[0].holdings = [{ uid: 6, cardId: cid(6), charges: 2, used: true }]
+  state.players[1].holdings = [{ uid: 9, cardId: cid(7), charges: 1, used: false }]
   return state
 }
 

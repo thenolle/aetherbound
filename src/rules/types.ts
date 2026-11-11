@@ -21,6 +21,13 @@ export type Weapon = {
   durability: number
 }
 
+export type Holding = {
+  uid: number
+  cardId: Id<'card'>
+  charges: number
+  used: boolean
+}
+
 export type HeroAbility = {
   cost: number
   effects: Effect[]
@@ -35,6 +42,7 @@ export type PlayerState = {
   tariff: number
   fatigue: number
   weapon: Weapon | null
+  holdings: Holding[]
   heroAttacked: boolean
   ability: HeroAbility
   abilityUsed: boolean
@@ -59,6 +67,8 @@ export type Command =
   | { type: 'play', handIndex: number, position: number, targetUid?: number }
   | { type: 'cast', handIndex: number, targetUid?: number }
   | { type: 'equip', handIndex: number }
+  | { type: 'place', handIndex: number }
+  | { type: 'activate', holdingUid: number, targetUid?: number }
   | { type: 'attack', attackerUid: number, target: AttackTarget }
   | { type: 'hero_attack', target: AttackTarget }
   | { type: 'hero_ability', targetUid?: number }
@@ -75,6 +85,9 @@ export type GameEvent =
   | { type: 'writ_cast', player: PlayerIndex, cardId: Id<'card'> }
   | { type: 'iron_equipped', player: PlayerIndex, cardId: Id<'card'>, attack: number, durability: number }
   | { type: 'iron_broken', player: PlayerIndex }
+  | { type: 'holding_placed', player: PlayerIndex, uid: number, cardId: Id<'card'>, charges: number }
+  | { type: 'holding_activated', player: PlayerIndex, uid: number }
+  | { type: 'holding_destroyed', player: PlayerIndex, uid: number }
   | { type: 'ability_used', player: PlayerIndex }
   | { type: 'attacked', player: PlayerIndex, attackerUid: number, target: AttackTarget }
   | { type: 'hero_attacked', player: PlayerIndex, target: AttackTarget }

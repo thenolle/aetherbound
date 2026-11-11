@@ -15,7 +15,9 @@ export const COMMAND_SCHEMAS = {
   hero_attack: { id: 5, fields: [['commandId', 'string'], ['targetKind', 'uint'], ['targetUid', 'optuint']] },
   hero_ability: { id: 6, fields: [['commandId', 'string'], ['targetUid', 'optuint']] },
   end_turn: { id: 7, fields: [['commandId', 'string']] },
-  surrender: { id: 8, fields: [['commandId', 'string']] }
+  surrender: { id: 8, fields: [['commandId', 'string']] },
+  place: { id: 9, fields: [['commandId', 'string'], ['handIndex', 'uint']] },
+  activate: { id: 10, fields: [['commandId', 'string'], ['holdingUid', 'uint'], ['targetUid', 'optuint']] },
 } as const satisfies Record<Command['type'], MessageSchema>
 
 export type DecodedCommand = Readonly<{ sequence: number, commandId: string, command: Command }>
@@ -72,6 +74,10 @@ function toValues(commandId: string, command: Command): WireValues {
       return { commandId, handIndex: command.handIndex, targetUid: command.targetUid }
     case 'equip':
       return { commandId, handIndex: command.handIndex }
+    case 'place':
+      return { commandId, handIndex: command.handIndex }
+    case 'activate':
+      return { commandId, holdingUid: command.holdingUid, targetUid: command.targetUid }
     case 'attack':
       return { commandId, attackerUid: command.attackerUid, ...targetValues(command.target) }
     case 'hero_attack':
@@ -87,16 +93,15 @@ function toValues(commandId: string, command: Command): WireValues {
 function fromValues(type: Command['type'], values: WireValues): Command {
   switch (type) {
     case 'play':
-      return {
-        type,
-        handIndex: requireNumber(values, 'handIndex'),
-        position: requireNumber(values, 'position'),
-        ...withTarget(optionalNumber(values, 'targetUid'))
-      }
+      return { type, handIndex: requireNumber(values, 'handIndex'), position: requireNumber(values, 'position'), ...withTarget(optionalNumber(values, 'targetUid')) }
     case 'cast':
       return { type, handIndex: requireNumber(values, 'handIndex'), ...withTarget(optionalNumber(values, 'targetUid')) }
     case 'equip':
       return { type, handIndex: requireNumber(values, 'handIndex') }
+    case 'place':
+      return { type, handIndex: requireNumber(values, 'handIndex') }
+    case 'activate':
+      return { type, holdingUid: requireNumber(values, 'holdingUid'), ...withTarget(optionalNumber(values, 'targetUid')) }
     case 'attack':
       return { type, attackerUid: requireNumber(values, 'attackerUid'), target: readTarget(values) }
     case 'hero_attack':

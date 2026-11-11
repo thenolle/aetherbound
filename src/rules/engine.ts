@@ -9,7 +9,7 @@ import { GAME_LIMITS } from '../shared/lexicon'
 import { Rng } from '../shared/rng'
 import { VERSIONS } from '../shared/versions'
 import { RULES } from './constants'
-import type { AttackTarget, Command, GameEvent, MatchState, Minion, PlayerIndex, PlayerState } from './types'
+import type { AttackTarget, Command, GameEvent, Holding, MatchState, Minion, PlayerIndex, PlayerState } from './types'
 
 export type PlayerSetup = Readonly<{ hero: HeroDefinition, deck: readonly Id<'card'>[] }>
 
@@ -74,6 +74,7 @@ function startTurn(state: MatchState, events: GameEvent[]): void {
   side.tariff = 0
   side.heroAttacked = false
   side.abilityUsed = false
+  for (const holding of side.holdings) holding.used = false
   events.push({ type: 'turn_started', player: state.active, turn: state.turn, aether: side.aether })
   drawCard(state, state.active, events)
   if (state.winner === null) {
@@ -310,6 +311,53 @@ function useHeroAbility(
   settleBoards(state, events)
 }
 
+function placeHolding(
+  state: MatchState,
+  command: Extract<Command, { type: 'place' }>,
+  registry: CardRegistry,
+  events: GameEvent[]
+): void {
+  const side = state.players[state.active]
+  const { cardId, card } = takeHandCard(state, command.handIndex, registry)
+  if (card.family !== 'holding') throw invalid('only holdings can be placed')
+  if (card.durability === undefined) throw new DomainError('internal', 'holding without charges')
+  if (card.cost > side.aether) throw new DomainError('insufficient_aether', 'not enough Aether Pressure')
+  if (side.holdings.length >= RULES.holdingSlots) throw new DomainError('board_full', 'all holding slots are occupied')
+
+  side.aether -= card.cost
+  side.hand.splice(command.handIndex, 1)
+  const holding: Holding = { uid: state.nextUid, cardId, charges: card.durability, used: false }
+  state.nextUid += 1
+  side.holdings.push(holding)
+  events.push({ type: 'holding_placed', player: state.active, uid: holding.uid, cardId, charges: holding.charges })
+}
+
+function activateHolding(
+  state: MatchState,
+  command: Extract<Command, { type: 'activate' }>,
+  registry: CardRegistry,
+  events: GameEvent[]
+): void {
+  const caster = state.active
+  const side = state.players[caster]
+  const holding = side.holdings.find((entry) => entry.uid === command.holdingUid)
+  if (holding === undefined) throw invalid('unknown holding')
+  if (holding.used) throw invalid('this holding was already used this turn')
+  const effects = registry.get(holding.cardId)?.effects ?? []
+  if (effects.length === 0) throw new DomainError('internal', 'holding without effects')
+  const chosen = pickTarget(state, effects, command.targetUid)
+
+  holding.used = true
+  holding.charges -= 1
+  events.push({ type: 'holding_activated', player: caster, uid: holding.uid })
+  runEffects(state, caster, effects, chosen, events)
+  if (holding.charges <= 0) {
+    side.holdings = side.holdings.filter((entry) => entry !== holding)
+    events.push({ type: 'holding_destroyed', player: caster, uid: holding.uid })
+  }
+  settleBoards(state, events)
+}
+
 function resolveAttack(
   state: MatchState,
   command: Extract<Command, { type: 'attack' }>,
@@ -387,6 +435,7 @@ export function createMatch(setup: MatchSetup): StepResult {
       tariff: 0,
       fatigue: 0,
       weapon: null,
+      holdings: [],
       heroAttacked: false,
       ability: { cost: entry.hero.ability.cost, effects: [...entry.hero.ability.effects] },
       abilityUsed: false,
@@ -439,6 +488,12 @@ export function applyCommand(
       break
     case 'equip':
       equipIron(next, command, registry, events)
+      break
+    case 'place':
+      placeHolding(next, command, registry, events)
+      break
+    case 'activate':
+      activateHolding(next, command, registry, events)
       break
     case 'attack':
       resolveAttack(next, command, events)

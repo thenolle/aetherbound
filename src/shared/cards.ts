@@ -70,6 +70,10 @@ function assertCardDefinition(card: CardDefinition): void {
     if (card.attack === undefined || !Number.isInteger(card.attack) || card.attack < 1) fail('irons need an integer attack >= 1')
     if (card.durability === undefined || !Number.isInteger(card.durability) || card.durability < 1) fail('irons need an integer durability >= 1')
   }
+  if (card.family === 'holding') {
+    if (card.durability === undefined || !Number.isInteger(card.durability) || card.durability < 1) fail('holdings need an integer durability >= 1')
+    checkEffects(card.effects ?? [], fail)
+  }
   if (card.family === 'writ') checkEffects(card.effects ?? [], fail)
   if (card.onPlay !== undefined) checkEffects(card.onPlay, fail)
   if (card.onDeath !== undefined) {

@@ -1,6 +1,6 @@
 import type { MatchView, ViewEvent } from '../rules/projection'
 import type { SequencedViewEvent } from '../rules/session'
-import type { AttackTarget, Minion, PlayerIndex, PlayerState, Weapon } from '../rules/types'
+import type { AttackTarget, Holding, Minion, PlayerIndex, PlayerState, Weapon } from '../rules/types'
 import type { Effect, EffectTarget } from '../shared/effects'
 import { ERROR_CODES } from '../shared/errors'
 import type { ErrorCode } from '../shared/errors'
@@ -47,7 +47,10 @@ export const EVENT_IDS = {
   taxed: 15,
   minion_died: 16,
   surrendered: 17,
-  game_over: 18
+  game_over: 18,
+  holding_placed: 19,
+  holding_activated: 20,
+  holding_destroyed: 21,
 } as const satisfies Record<ViewEvent['type'], number>
 
 const MESSAGE_TYPE_BY_ID = new Map<number, ServerMessage['type']>(
@@ -242,6 +245,21 @@ function readWeapon(r: ByteReader): Weapon | null {
   return { cardId: readId(r, 'card'), attack: r.varuint(), durability: r.varuint() }
 }
 
+function writeHolding(w: ByteWriter, holding: Holding): void {
+  w.varuint(holding.uid)
+  writeId(w, holding.cardId)
+  w.varuint(holding.charges)
+  writeBool(w, holding.used)
+}
+
+function readHolding(r: ByteReader): Holding {
+  const uid = r.varuint()
+  const cardId = readId(r, 'card')
+  const charges = r.varuint()
+  const used = readBool(r)
+  return { uid, cardId, charges, used }
+}
+
 function writeSide(w: ByteWriter, side: SharedSide): void {
   writeId(w, side.heroId)
   w.varint(side.heroHealth)
@@ -251,6 +269,7 @@ function writeSide(w: ByteWriter, side: SharedSide): void {
   w.varuint(side.tariff)
   w.varuint(side.fatigue)
   writeWeapon(w, side.weapon)
+  writeList(w, side.holdings, (holding) => writeHolding(w, holding))
   writeBool(w, side.heroAttacked)
   w.varuint(side.ability.cost)
   writeList(w, side.ability.effects, (effect) => writeEffect(w, effect))
@@ -268,6 +287,7 @@ function readSide(r: ByteReader): SharedSide {
   const tariff = r.varuint()
   const fatigue = r.varuint()
   const weapon = readWeapon(r)
+  const holdings = readList(r, () => readHolding(r))
   const heroAttacked = readBool(r)
   const cost = r.varuint()
   const effects = readList(r, () => readEffect(r))
@@ -283,6 +303,7 @@ function readSide(r: ByteReader): SharedSide {
     tariff,
     fatigue,
     weapon,
+    holdings,
     heroAttacked,
     ability: { cost, effects },
     abilityUsed,
@@ -363,6 +384,17 @@ function writeEvent(w: ByteWriter, event: ViewEvent): void {
       w.varuint(event.attack)
       w.varuint(event.durability)
       return
+    case 'holding_placed':
+      w.u8(event.player)
+      w.varuint(event.uid)
+      writeId(w, event.cardId)
+      w.varuint(event.charges)
+      return
+    case 'holding_activated':
+    case 'holding_destroyed':
+      w.u8(event.player)
+      w.varuint(event.uid)
+      return
     case 'attacked':
       w.u8(event.player)
       w.varuint(event.attackerUid)
@@ -414,6 +446,11 @@ function readEvent(r: ByteReader): ViewEvent {
       return { type, player: readPlayer(r), uid: r.varuint(), cardId: readId(r, 'card'), position: r.varuint() }
     case 'iron_equipped':
       return { type, player: readPlayer(r), cardId: readId(r, 'card'), attack: r.varuint(), durability: r.varuint() }
+    case 'holding_placed':
+      return { type, player: readPlayer(r), uid: r.varuint(), cardId: readId(r, 'card'), charges: r.varuint() }
+    case 'holding_activated':
+    case 'holding_destroyed':
+      return { type, player: readPlayer(r), uid: r.varuint() }
     case 'attacked':
       return { type, player: readPlayer(r), attackerUid: r.varuint(), target: readTarget(r) }
     case 'hero_attacked':

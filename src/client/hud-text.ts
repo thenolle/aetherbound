@@ -1,5 +1,5 @@
 import type { MatchView, ViewEvent } from '../rules/projection'
-import type { AttackTarget, Minion } from '../rules/types'
+import type { AttackTarget, Holding, Minion } from '../rules/types'
 import type { CardRegistry } from '../shared/cards'
 import { clampIndex, targetList } from './controls'
 import type { Selection } from './controls'
@@ -23,6 +23,10 @@ const targetText = (target: AttackTarget): string => (target.kind === 'hero' ? '
 function minionText(minion: Minion, registry: CardRegistry): string {
   const keywords = minion.keywords.length > 0 ? ` [${minion.keywords.join(',')}]` : ''
   return `#${minion.uid} ${nameOf(registry, minion.cardId)} ${minion.attack}/${minion.health}${keywords}${minion.exhausted ? ' (rest)' : ''}`
+}
+
+function holdingText(holding: Holding, registry: CardRegistry): string {
+  return `#${holding.uid} ${nameOf(registry, holding.cardId)} x${holding.charges}${holding.used ? ' (used)' : ''}`
 }
 
 export function describeEvent(event: ViewEvent, registry: CardRegistry): string {
@@ -49,6 +53,12 @@ export function describeEvent(event: ViewEvent, registry: CardRegistry): string 
       return `${who(event.player)} iron breaks`
     case 'ability_used':
       return `${who(event.player)} uses the hero ability`
+    case 'holding_placed':
+      return `${who(event.player)} places ${card(event.cardId)} as #${event.uid}`
+    case 'holding_activated':
+      return `${who(event.player)} activates holding #${event.uid}`
+    case 'holding_destroyed':
+      return `${who(event.player)} loses holding #${event.uid}`
     case 'attacked':
       return `${who(event.player)} #${event.attackerUid} attacks ${targetText(event.target)}`
     case 'hero_attacked':
@@ -95,6 +105,7 @@ export function buildHud(input: HudInput): HudLine[] {
   add(`hp ${foe.heroHealth}/${foe.heroMaxHealth}  aether ${foe.aether}/${foe.aetherMax}  hand ${foe.handCount}  deck ${foe.deckCount}  tariff ${foe.tariff}`)
   if (foe.weapon !== null) add(`iron: ${nameOf(registry, foe.weapon.cardId)} ${foe.weapon.attack}/${foe.weapon.durability}`)
   add(`board: ${foe.board.map((minion) => minionText(minion, registry)).join('  ') || '(empty)'}`)
+  add(`holdings: ${foe.holdings.map((holding) => holdingText(holding, registry)).join('  ') || '(none)'}`)
   add('')
 
   const me = view.self
@@ -105,6 +116,8 @@ export function buildHud(input: HudInput): HudLine[] {
 
   const selectedMinion = clampIndex(selection.minion, me.board.length)
   add(`board: ${me.board.map((minion, index) => `${index === selectedMinion ? '>' : ' '}${minionText(minion, registry)}`).join('  ') || '(empty)'}`)
+  const selectedHolding = clampIndex(selection.holding, me.holdings.length)
+  add(`holdings: ${me.holdings.map((holding, index) => `${index === selectedHolding ? '>' : ' '}${holdingText(holding, registry)}`).join('  ') || '(none)'}`)
 
   const selectedCard = clampIndex(selection.hand, me.hand.length)
   add(`hand: ${me.hand.map((id, index) => `${index === selectedCard ? '>' : ' '}${index + 1}:${nameOf(registry, id)}(${registry.get(id)?.cost ?? '?'})`).join(' ') || '(empty)'}`)
@@ -117,6 +130,6 @@ export function buildHud(input: HudInput): HudLine[] {
   add('-- log --', 'dim')
   for (const note of input.notes) add(note)
   add('')
-  add('keys: left/right card  p play  m minion  t target  a attack  h hero attack  b ability  e end turn  s surrender x2', 'dim')
+  add('keys: left/right card  p play  m minion  n holding  t target  a attack  h hero attack  k activate  b ability  e end turn  s surrender x2', 'dim')
   return lines
 }

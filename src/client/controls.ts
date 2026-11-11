@@ -4,9 +4,9 @@ import type { CardRegistry } from '../shared/cards'
 import { needsChosenTarget } from '../shared/effects'
 import type { Effect } from '../shared/effects'
 
-export type Selection = Readonly<{ hand: number, minion: number, target: number, surrenderArmed: boolean }>
+export type Selection = Readonly<{ hand: number, minion: number, holding: number, target: number, surrenderArmed: boolean }>
 
-export const INITIAL_SELECTION: Selection = { hand: 0, minion: 0, target: 0, surrenderArmed: false }
+export const INITIAL_SELECTION: Selection = { hand: 0, minion: 0, holding: 0, target: 0, surrenderArmed: false }
 
 export type KeyOutcome = Readonly<{ selection: Selection, command: Command | null, note: string }>
 
@@ -56,9 +56,19 @@ export function handleKey(key: string, view: MatchView, selection: Selection, re
       }
       case 'iron':
         return issue({ type: 'equip', handIndex })
+      case 'holding':
+        return issue({ type: 'place', handIndex })
       default:
         return none(base, `${card.name.en} cannot be played yet`)
     }
+  }
+
+  const activateSelected = (): KeyOutcome => {
+    const holding = view.self.holdings[clampIndex(base.holding, view.self.holdings.length)]
+    if (holding === undefined) return none(base, 'no holding selected')
+    const picked = pickTarget(registry.get(holding.cardId)?.effects ?? [])
+    if (!picked.ok) return none(base, 'pick an enemy minion with t first')
+    return issue({ type: 'activate', holdingUid: holding.uid, ...picked.extra })
   }
 
   switch (key) {
@@ -68,6 +78,8 @@ export function handleKey(key: string, view: MatchView, selection: Selection, re
       return none({ ...base, hand: wrap(base.hand, view.self.hand.length, 1) })
     case 'm':
       return none({ ...base, minion: wrap(base.minion, view.self.board.length, 1) })
+    case 'n':
+      return none({ ...base, holding: wrap(base.holding, view.self.holdings.length, 1) })
     case 't':
       return none({ ...base, target: wrap(base.target, targets.length, 1) })
     case 'e':
@@ -78,6 +90,8 @@ export function handleKey(key: string, view: MatchView, selection: Selection, re
       return { selection: base, command: { type: 'surrender' }, note: '' }
     case 'p':
       return playSelected()
+    case 'k':
+      return activateSelected()
     case 'a': {
       const attacker = view.self.board[clampIndex(base.minion, view.self.board.length)]
       if (attacker === undefined) return none(base, 'no minion selected')

@@ -19,6 +19,9 @@ const COMMANDS: readonly Command[] = [
   { type: 'hero_attack', target: { kind: 'minion', uid: 4 } },
   { type: 'hero_ability' },
   { type: 'hero_ability', targetUid: 12 },
+  { type: 'place', handIndex: 3 },
+  { type: 'activate', holdingUid: 8 },
+  { type: 'activate', holdingUid: 8, targetUid: 12 },
   { type: 'end_turn' },
   { type: 'surrender' }
 ]
