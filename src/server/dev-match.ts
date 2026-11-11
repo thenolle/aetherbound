@@ -1,13 +1,17 @@
+import { BRINE_LOCK_CARDS, BRINE_LOCK_HERO } from '../content/brine-lock'
 import { EXCHEQUER_CARDS, EXCHEQUER_DECK, EXCHEQUER_HERO } from '../content/exchequer'
 import type { ContentLookup } from '../persistence/restore'
 import type { MatchSetup } from '../rules/engine'
 import { createRegistry } from '../shared/cards'
 
-const registry = createRegistry(EXCHEQUER_CARDS)
+const registry = createRegistry([...EXCHEQUER_CARDS, ...BRINE_LOCK_CARDS])
 
 export const devContent: ContentLookup = {
   registry,
-  heroes: new Map([[EXCHEQUER_HERO.id, EXCHEQUER_HERO]])
+  heroes: new Map([
+    [EXCHEQUER_HERO.id, EXCHEQUER_HERO],
+    [BRINE_LOCK_HERO.id, BRINE_LOCK_HERO]
+  ])
 }
 
 export function devMatchSetup(): MatchSetup {
