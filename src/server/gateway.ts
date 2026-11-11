@@ -1,0 +1,108 @@
+import type { PlayerIndex } from '../rules/types'
+import type { AppConfig } from '../shared/config'
+import { buildClientBundle } from './client-bundle'
+import { devMatchSetup } from './dev-match'
+import { handleRequest } from './http'
+import type { Readiness } from './http'
+import type { Room, SeatLink } from './room'
+import type { RoomRegistry } from './rooms'
+import { SCRIPT_HEADERS, SHELL_HEADERS, renderShell } from './shell'
+
+export type SocketData = {
+  seat: PlayerIndex
+  room: Room
+  link: SeatLink | null
+}
+
+const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1'])
+const NAME_PATTERN = /^[a-z0-9-]{1,32}$/
+const NO_STORE = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } as const
+
+const json = (body: unknown, status: number): Response => Response.json(body, { status, headers: NO_STORE })
+
+function originAllowed(request: Request, url: URL): boolean {
+  const origin = request.headers.get('origin')
+  if (origin === null) return true
+  try {
+    return new URL(origin).host === url.host
+  } catch {
+    return false
+  }
+}
+
+export function createGameServer(config: AppConfig, isReady: Readiness, rooms: RoomRegistry) {
+  let bundle: Promise<string> | null = null
+  const clientBundle = (): Promise<string> => {
+    bundle ??= buildClientBundle().catch((error: unknown) => {
+      bundle = null
+      throw error
+    })
+    return bundle
+  }
+
+  return Bun.serve({
+    hostname: config.host,
+    port: config.port,
+    async fetch(request, server) {
+      const url = new URL(request.url)
+      const readOnly = request.method === 'GET' || request.method === 'HEAD'
+
+      if (url.pathname === '/ws') {
+        if (!originAllowed(request, url)) return json({ error: 'forbidden_origin' }, 403)
+        const binding = rooms.lookup(url.searchParams.get('token') ?? '')
+        if (binding === null) return json({ error: 'unauthorized' }, 401)
+        const data: SocketData = { seat: binding.seat, room: binding.room, link: null }
+        if (server.upgrade(request, { data })) return undefined
+        return json({ error: 'upgrade_failed' }, 400)
+      }
+
+      if (readOnly && url.pathname === '/') return new Response(renderShell(), { headers: SHELL_HEADERS })
+
+      if (readOnly && url.pathname === '/client.js') {
+        try {
+          return new Response(await clientBundle(), { headers: SCRIPT_HEADERS })
+        } catch (error) {
+          console.error(error)
+          return json({ error: 'client_build_failed' }, 500)
+        }
+      }
+
+      if (readOnly && url.pathname === '/dev/join') {
+        const address = server.requestIP(request)?.address ?? ''
+        if (config.env === 'production' || !LOOPBACK.has(address)) return json({ error: 'not_found' }, 404)
+        const name = url.searchParams.get('room') ?? 'dev'
+        const seat = url.searchParams.get('seat')
+        if (!NAME_PATTERN.test(name) || (seat !== '0' && seat !== '1')) return json({ error: 'bad_request' }, 400)
+        return json({ token: rooms.joinNamed(name, seat === '0' ? 0 : 1, devMatchSetup) }, 200)
+      }
+
+      return handleRequest(request, config, isReady)
+    },
+    websocket: {
+      data: {} as SocketData,
+      maxPayloadLength: 1024,
+      idleTimeout: 120,
+      open(ws) {
+        const link: SeatLink = {
+          send: (data) => {
+            if (ws.send(data) === 0) ws.close(1013, 'client too slow')
+          },
+          close: (code, reason) => ws.close(code, reason)
+        }
+        ws.data.link = link
+        ws.data.room.attach(ws.data.seat, link)
+      },
+      message(ws, message) {
+        const link = ws.data.link
+        if (link === null || typeof message === 'string') {
+          ws.close(1003, 'binary frames only')
+          return
+        }
+        ws.data.room.handleFrame(ws.data.seat, link, new Uint8Array(message))
+      },
+      close(ws) {
+        if (ws.data.link !== null) ws.data.room.detach(ws.data.seat, ws.data.link)
+      }
+    }
+  })
+}

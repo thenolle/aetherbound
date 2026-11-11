@@ -1,16 +1,20 @@
 import { ConfigError, loadConfig } from '../shared/config'
 import { createLogger } from '../shared/log'
-import { createServer } from './http'
+import { createGameServer } from './gateway'
+import { RoomRegistry } from './rooms'
 
 try {
   const config = loadConfig(process.env)
   const log = createLogger(config.logLevel, { region: config.region })
+  const rooms = new RoomRegistry()
   let ready = true
-  const server = createServer(config, () => ready)
+  const server = createGameServer(config, () => ready, rooms)
   log.info('server started', { url: server.url.toString(), env: config.env })
+
   const shutdown = async (signal: string): Promise<void> => {
     log.info('shutdown requested', { signal })
     ready = false
+    rooms.closeAll()
     await server.stop()
     process.exit(0)
   }
