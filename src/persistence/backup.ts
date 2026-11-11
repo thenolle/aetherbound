@@ -35,7 +35,8 @@ export function checkDatabase(db: Database): Pick<BackupResult, 'integrity' | 'f
 export function backupDatabase(db: Database, target: string): BackupResult {
   if (existsSync(target)) throw new Error(`refusing to overwrite ${target}`)
   mkdirSync(dirname(target), { recursive: true })
-  db.prepare('VACUUM INTO ?1').run(target)
+  const statement = db.prepare('VACUUM INTO ?1')
+  try { statement.run(target) } finally { statement.finalize() }
   const copy = new Database(target, { readonly: true })
   try { return { path: target, bytes: statSync(target).size, ...checkDatabase(copy) } } finally { copy.close() }
 }

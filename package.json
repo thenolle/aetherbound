@@ -11,6 +11,8 @@
     "test": "bun test",
     "deps:check": "bun run src/tools/check-deps.ts",
     "season:close": "bun run src/tools/close-season.ts",
+    "db:backup": "bun run src/tools/backup.ts",
+    "db:check": "bun run src/tools/check-db.ts",
     "verify": "bun run deps:check && bun run typecheck && bun test"
   },
   "devDependencies": {

@@ -2,6 +2,7 @@ node_modules/
 generated/
 dist/
 data/
+backups/
 .env
 .env.*
 *.db

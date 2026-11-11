@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { SqliteAccountStore } from './account-store'
 import { backupDatabase, backupName, checkDatabase, rotateBackups } from './backup'
 import { migrate, openDatabase } from './database'
 import { MIGRATIONS } from './migrations'
@@ -14,14 +13,12 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'aetherbound-backup-'))
   db = openDatabase(join(dir, 'live', 'game.db'))
   migrate(db, MIGRATIONS)
-  const accounts = new SqliteAccountStore(db, () => 1000)
-  accounts.upsertGoogleAccount('a', 'Alice')
-  accounts.upsertGoogleAccount('b', 'Bob')
+  db.run("INSERT INTO accounts (id, google_sub, display_name, created_at, last_login_at) VALUES ('a1', 'a', 'Alice', 1, 1), ('b1', 'b', 'Bob', 1, 1)")
 })
 
 afterEach(() => {
   db.close()
-  rmSync(dir, { recursive: true, force: true })
+  rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
 })
 
 describe('backups', () => {
