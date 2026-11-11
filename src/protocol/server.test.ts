@@ -27,6 +27,7 @@ const ALL_EVENTS: readonly ViewEvent[] = [
   { type: 'hero_attacked', player: 1, target: { kind: 'hero' } },
   { type: 'damaged', player: 0, uid: null, amount: 5 },
   { type: 'damaged', player: 1, uid: 7, amount: 2 },
+  { type: 'surged', player: 0, amount: 2 },
   { type: 'healed', player: 0, uid: null, amount: 1 },
   { type: 'taxed', player: 1, amount: 1 },
   { type: 'minion_died', player: 0, uid: 4 },
@@ -78,6 +79,8 @@ function richState() {
       { kind: 'blight', amount: 2, target: 'chosen-enemy-minion' },
       { kind: 'drain', amount: 2 },
       { kind: 'raise', cardId: cid(9), attack: 2, health: 1, count: 2 },
+      { kind: 'surge', amount: 3 },
+      { kind: 'rupture', count: 2 },
     ]
   }]
   state.players[1].board = [{ uid: 2, cardId: cid(3), attack: 3, health: 3, maxHealth: 3, exhausted: false, keywords: [], onDeath: [] }]

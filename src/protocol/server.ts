@@ -60,6 +60,7 @@ export const EVENT_IDS = {
   minion_summoned: 28,
   blighted: 29,
   grew: 30,
+  surged: 31,
 } as const satisfies Record<ViewEvent['type'], number>
 
 const MESSAGE_TYPE_BY_ID = new Map<number, ServerMessage['type']>((Object.keys(MESSAGE_IDS) as ServerMessage['type'][]).map((type) => [MESSAGE_IDS[type], type]))
@@ -189,6 +190,14 @@ function writeEffect(w: ByteWriter, effect: Effect): void {
       w.u8(2)
       w.varuint(effect.count)
       return
+    case 'surge':
+      w.u8(9)
+      w.varuint(effect.amount)
+      return
+    case 'rupture':
+      w.u8(10)
+      w.varuint(effect.count)
+      return
     case 'drain':
       w.u8(7)
       w.varuint(effect.amount)
@@ -231,6 +240,8 @@ function readEffect(r: ByteReader): Effect {
   }
   if (kind === 7) return { kind: 'drain', amount: r.varuint() }
   if (kind === 8) return { kind: 'raise', cardId: readId(r, 'card'), attack: r.varuint(), health: r.varuint(), count: r.varuint() }
+  if (kind === 9) return { kind: 'surge', amount: r.varuint() }
+  if (kind === 10) return { kind: 'rupture', count: r.varuint() }
   throw malformed('invalid effect kind')
 }
 
@@ -562,6 +573,10 @@ function writeEvent(w: ByteWriter, event: ViewEvent): void {
     case 'game_over':
       w.u8(event.winner)
       return
+    case 'surged':
+      w.u8(event.player)
+      w.varuint(event.amount)
+      return
   }
 }
 
@@ -599,6 +614,7 @@ function readEvent(r: ByteReader): ViewEvent {
     case 'minion_summoned': return { type, player: readPlayer(r), uid: r.varuint(), cardId: readId(r, 'card') }
     case 'blighted': return { type, player: readPlayer(r), uid: r.varuint(), stacks: r.varuint() }
     case 'grew': return { type, player: readPlayer(r), uid: r.varuint(), attack: r.varuint(), health: r.varuint() }
+    case 'surged': return { type, player: readPlayer(r), amount: r.varuint() }
   }
 }
 

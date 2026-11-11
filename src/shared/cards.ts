@@ -56,6 +56,10 @@ function checkEffects(effects: readonly Effect[], fail: Fail): void {
       if (!Number.isInteger(effect.count) || effect.count < 1 || effect.count > GAME_LIMITS.boardSlots) fail('summon count must be 1 to 7')
       if (!Number.isInteger(effect.attack) || effect.attack < 0 || effect.attack > 99) fail('summoned attack must be 0 to 99')
       if (!Number.isInteger(effect.health) || effect.health < 1 || effect.health > 99) fail('summoned health must be 1 to 99')
+    } else if (effect.kind === 'rupture') {
+      if (!Number.isInteger(effect.count) || effect.count < 1 || effect.count > GAME_LIMITS.boardSlots) fail('rupture count must be 1 to 7')
+    } else if (effect.kind === 'surge') {
+      if (!Number.isInteger(effect.amount) || effect.amount < 1 || effect.amount > GAME_LIMITS.aetherPressureMax) fail('surge amount must be 1 to 10')
     } else if ('amount' in effect && (!Number.isInteger(effect.amount) || effect.amount < 1 || effect.amount > 99)) {
       fail('effect amount must be 1 to 99')
     }

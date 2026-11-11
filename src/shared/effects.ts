@@ -10,6 +10,8 @@ export type Effect =
   | Readonly<{ kind: 'drain', amount: number }>
   | Readonly<{ kind: 'draw', count: number }>
   | Readonly<{ kind: 'tariff', amount: number }>
+  | Readonly<{ kind: 'surge', amount: number }>
+  | Readonly<{ kind: 'rupture', count: number }>
 
 export type TokenEffect = Extract<Effect, { kind: 'summon' | 'raise' }>
 

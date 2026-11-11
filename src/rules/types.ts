@@ -126,3 +126,4 @@ export type GameEvent =
   | { type: 'minion_summoned', player: PlayerIndex, uid: number, cardId: Id<'card'> }
   | { type: 'blighted', player: PlayerIndex, uid: number, stacks: number }
   | { type: 'grew', player: PlayerIndex, uid: number, attack: number, health: number }
+  | { type: 'surged', player: PlayerIndex, amount: number }

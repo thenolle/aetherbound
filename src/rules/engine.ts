@@ -172,6 +172,25 @@ function applyEffect(state: MatchState, caster: PlayerIndex, effect: Effect, cho
     if (state.winner === null) healHero(state, caster, effect.amount, events)
     return
   }
+  if (effect.kind === 'surge') {
+    const side = state.players[caster]
+    const gained = Math.min(effect.amount, GAME_LIMITS.aetherPressureMax - side.aether)
+    if (gained > 0) {
+      side.aether += gained
+      events.push({ type: 'surged', player: caster, amount: gained })
+    }
+    return
+  }
+  if (effect.kind === 'rupture') {
+    const victims = state.players[caster].board.filter((minion) => minion.health > 0).sort((a, b) => a.attack + a.health - (b.attack + b.health) || a.uid - b.uid).slice(0, effect.count)
+    let burst = 0
+    for (const minion of victims) {
+      burst += minion.attack
+      minion.health = 0
+    }
+    if (burst > 0) damageHero(state, foe, burst, events)
+    return
+  }
   if (effect.kind !== 'damage' && effect.kind !== 'heal') return
   const amount = effect.amount
   const harmful = effect.kind === 'damage'

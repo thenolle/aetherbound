@@ -54,6 +54,8 @@ export function describeEvent(event: ViewEvent, registry: CardRegistry): string 
     case 'minion_summoned': return `${who(event.player)} summons ${card(event.cardId)} as #${event.uid}`
     case 'blighted': return `#${event.uid} is blighted (${event.stacks})`
     case 'grew': return `#${event.uid} grows to ${event.attack}/${event.health}`
+    case 'surged':
+      return `${who(event.player)} vents ${event.amount} Aether`
     case 'attacked': return `${who(event.player)} #${event.attackerUid} attacks ${targetText(event.target)}`
     case 'hero_attacked': return `${who(event.player)} hero attacks ${targetText(event.target)}`
     case 'damaged': return `${event.uid === null ? `${who(event.player)} hero` : `#${event.uid}`} takes ${event.amount}`
