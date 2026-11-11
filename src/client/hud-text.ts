@@ -1,5 +1,5 @@
 import type { MatchView, ViewEvent } from '../rules/projection'
-import type { AttackTarget, Holding, Minion } from '../rules/types'
+import type { AttackTarget, Holding, Minion, Oath } from '../rules/types'
 import type { CardRegistry } from '../shared/cards'
 import { clampIndex, targetList } from './controls'
 import type { Selection } from './controls'
@@ -27,6 +27,10 @@ function minionText(minion: Minion, registry: CardRegistry): string {
 
 function holdingText(holding: Holding, registry: CardRegistry): string {
   return `#${holding.uid} ${nameOf(registry, holding.cardId)} x${holding.charges}${holding.used ? ' (used)' : ''}`
+}
+
+function oathText(oath: Oath, registry: CardRegistry): string {
+  return `#${oath.uid} ${nameOf(registry, oath.cardId)} ${oath.progress}/${oath.goal}`
 }
 
 export function describeEvent(event: ViewEvent, registry: CardRegistry): string {
@@ -59,6 +63,16 @@ export function describeEvent(event: ViewEvent, registry: CardRegistry): string 
       return `${who(event.player)} activates holding #${event.uid}`
     case 'holding_destroyed':
       return `${who(event.player)} loses holding #${event.uid}`
+    case 'snare_set':
+      return `${who(event.player)} sets ${event.cardId === null ? 'a snare' : card(event.cardId)}`
+    case 'snare_sprung':
+      return `${who(event.player)} springs ${card(event.cardId)}`
+    case 'oath_sworn':
+      return `${who(event.player)} swears ${card(event.cardId)} (goal ${event.goal})`
+    case 'oath_progress':
+      return `${who(event.player)} oath #${event.uid} progress ${event.progress}`
+    case 'oath_fulfilled':
+      return `${who(event.player)} fulfils oath #${event.uid}`
     case 'attacked':
       return `${who(event.player)} #${event.attackerUid} attacks ${targetText(event.target)}`
     case 'hero_attacked':
@@ -106,6 +120,7 @@ export function buildHud(input: HudInput): HudLine[] {
   if (foe.weapon !== null) add(`iron: ${nameOf(registry, foe.weapon.cardId)} ${foe.weapon.attack}/${foe.weapon.durability}`)
   add(`board: ${foe.board.map((minion) => minionText(minion, registry)).join('  ') || '(empty)'}`)
   add(`holdings: ${foe.holdings.map((holding) => holdingText(holding, registry)).join('  ') || '(none)'}`)
+  add(`snares: ${foe.snareCount}   oaths: ${foe.oaths.map((oath) => oathText(oath, registry)).join('  ') || '(none)'}`)
   add('')
 
   const me = view.self
@@ -118,6 +133,7 @@ export function buildHud(input: HudInput): HudLine[] {
   add(`board: ${me.board.map((minion, index) => `${index === selectedMinion ? '>' : ' '}${minionText(minion, registry)}`).join('  ') || '(empty)'}`)
   const selectedHolding = clampIndex(selection.holding, me.holdings.length)
   add(`holdings: ${me.holdings.map((holding, index) => `${index === selectedHolding ? '>' : ' '}${holdingText(holding, registry)}`).join('  ') || '(none)'}`)
+  add(`snares: ${me.snares.map((snare) => nameOf(registry, snare.cardId)).join('  ') || '(none)'}   oaths: ${me.oaths.map((oath) => oathText(oath, registry)).join('  ') || '(none)'}`)
 
   const selectedCard = clampIndex(selection.hand, me.hand.length)
   add(`hand: ${me.hand.map((id, index) => `${index === selectedCard ? '>' : ' '}${index + 1}:${nameOf(registry, id)}(${registry.get(id)?.cost ?? '?'})`).join(' ') || '(empty)'}`)

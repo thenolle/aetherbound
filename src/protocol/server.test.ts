@@ -35,6 +35,12 @@ const ALL_EVENTS: readonly ViewEvent[] = [
   { type: 'holding_placed', player: 0, uid: 6, cardId: cid(6), charges: 3 },
   { type: 'holding_activated', player: 1, uid: 6 },
   { type: 'holding_destroyed', player: 1, uid: 6 },
+  { type: 'snare_set', player: 0, uid: 10, cardId: cid(8) },
+  { type: 'snare_set', player: 1, uid: 11, cardId: null },
+  { type: 'snare_sprung', player: 1, uid: 11, cardId: cid(9) },
+  { type: 'oath_sworn', player: 0, uid: 12, cardId: cid(10), goal: 3 },
+  { type: 'oath_progress', player: 0, uid: 12, progress: 1 },
+  { type: 'oath_fulfilled', player: 0, uid: 12 },
 ]
 
 const eventsMessage: ServerMessage = {
@@ -70,6 +76,9 @@ function richState() {
   state.winner = 0
   state.players[0].holdings = [{ uid: 6, cardId: cid(6), charges: 2, used: true }]
   state.players[1].holdings = [{ uid: 9, cardId: cid(7), charges: 1, used: false }]
+  state.players[0].snares = [{ uid: 10, cardId: cid(8) }]
+  state.players[1].snares = [{ uid: 11, cardId: cid(9) }]
+  state.players[0].oaths = [{ uid: 12, cardId: cid(10), progress: 1, goal: 3 }]
   return state
 }
 

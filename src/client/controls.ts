@@ -58,6 +58,10 @@ export function handleKey(key: string, view: MatchView, selection: Selection, re
         return issue({ type: 'equip', handIndex })
       case 'holding':
         return issue({ type: 'place', handIndex })
+      case 'snare':
+        return issue({ type: 'set', handIndex })
+      case 'oath':
+        return issue({ type: 'swear', handIndex })
       default:
         return none(base, `${card.name.en} cannot be played yet`)
     }

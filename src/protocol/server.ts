@@ -1,6 +1,6 @@
 import type { MatchView, ViewEvent } from '../rules/projection'
 import type { SequencedViewEvent } from '../rules/session'
-import type { AttackTarget, Holding, Minion, PlayerIndex, PlayerState, Weapon } from '../rules/types'
+import type { AttackTarget, Holding, Minion, Oath, PlayerIndex, PlayerState, Snare, Weapon } from '../rules/types'
 import type { Effect, EffectTarget } from '../shared/effects'
 import { ERROR_CODES } from '../shared/errors'
 import type { ErrorCode } from '../shared/errors'
@@ -51,6 +51,11 @@ export const EVENT_IDS = {
   holding_placed: 19,
   holding_activated: 20,
   holding_destroyed: 21,
+  snare_set: 22,
+  snare_sprung: 23,
+  oath_sworn: 24,
+  oath_progress: 25,
+  oath_fulfilled: 26,
 } as const satisfies Record<ViewEvent['type'], number>
 
 const MESSAGE_TYPE_BY_ID = new Map<number, ServerMessage['type']>(
@@ -63,7 +68,7 @@ const EVENT_TYPE_BY_ID = new Map<number, ViewEvent['type']>(
 
 const EFFECT_TARGETS: readonly EffectTarget[] = ['enemy-hero', 'own-hero', 'chosen-enemy-minion', 'all-enemy-minions']
 
-type SharedSide = Omit<PlayerState, 'deck' | 'hand'> & { deckCount: number }
+type SharedSide = Omit<PlayerState, 'deck' | 'hand' | 'snares'> & { deckCount: number }
 
 const malformed = (message: string): ProtocolError => new ProtocolError('malformed', message)
 
@@ -260,6 +265,32 @@ function readHolding(r: ByteReader): Holding {
   return { uid, cardId, charges, used }
 }
 
+function writeSnare(w: ByteWriter, snare: Snare): void {
+  w.varuint(snare.uid)
+  writeId(w, snare.cardId)
+}
+
+function readSnare(r: ByteReader): Snare {
+  const uid = r.varuint()
+  const cardId = readId(r, 'card')
+  return { uid, cardId }
+}
+
+function writeOath(w: ByteWriter, oath: Oath): void {
+  w.varuint(oath.uid)
+  writeId(w, oath.cardId)
+  w.varuint(oath.progress)
+  w.varuint(oath.goal)
+}
+
+function readOath(r: ByteReader): Oath {
+  const uid = r.varuint()
+  const cardId = readId(r, 'card')
+  const progress = r.varuint()
+  const goal = r.varuint()
+  return { uid, cardId, progress, goal }
+}
+
 function writeSide(w: ByteWriter, side: SharedSide): void {
   writeId(w, side.heroId)
   w.varint(side.heroHealth)
@@ -270,6 +301,7 @@ function writeSide(w: ByteWriter, side: SharedSide): void {
   w.varuint(side.fatigue)
   writeWeapon(w, side.weapon)
   writeList(w, side.holdings, (holding) => writeHolding(w, holding))
+  writeList(w, side.oaths, (oath) => writeOath(w, oath))
   writeBool(w, side.heroAttacked)
   w.varuint(side.ability.cost)
   writeList(w, side.ability.effects, (effect) => writeEffect(w, effect))
@@ -288,6 +320,7 @@ function readSide(r: ByteReader): SharedSide {
   const fatigue = r.varuint()
   const weapon = readWeapon(r)
   const holdings = readList(r, () => readHolding(r))
+  const oaths = readList(r, () => readOath(r))
   const heroAttacked = readBool(r)
   const cost = r.varuint()
   const effects = readList(r, () => readEffect(r))
@@ -304,6 +337,7 @@ function readSide(r: ByteReader): SharedSide {
     fatigue,
     weapon,
     holdings,
+    oaths,
     heroAttacked,
     ability: { cost, effects },
     abilityUsed,
@@ -320,8 +354,10 @@ function writeView(w: ByteWriter, view: MatchView): void {
   w.u8(view.viewer)
   writeSide(w, view.self)
   writeList(w, view.self.hand, (cardId) => writeId(w, cardId))
+  writeList(w, view.self.snares, (snare) => writeSnare(w, snare))
   writeSide(w, view.opponent)
   w.varuint(view.opponent.handCount)
+  w.varuint(view.opponent.snareCount)
 }
 
 function readView(r: ByteReader): MatchView {
@@ -332,16 +368,18 @@ function readView(r: ByteReader): MatchView {
   const viewer = readPlayer(r)
   const selfSide = readSide(r)
   const hand = readList(r, () => readId(r, 'card'))
+  const snares = readList(r, () => readSnare(r))
   const foeSide = readSide(r)
   const handCount = r.varuint()
+  const snareCount = r.varuint()
   return {
     rulesVersion,
     turn,
     active,
     winner,
     viewer,
-    self: { ...selfSide, hand },
-    opponent: { ...foeSide, handCount }
+    self: { ...selfSide, hand, snares },
+    opponent: { ...foeSide, handCount, snareCount }
   }
 }
 
@@ -392,6 +430,31 @@ function writeEvent(w: ByteWriter, event: ViewEvent): void {
       return
     case 'holding_activated':
     case 'holding_destroyed':
+      w.u8(event.player)
+      w.varuint(event.uid)
+      return
+    case 'snare_set':
+      w.u8(event.player)
+      w.varuint(event.uid)
+      writeOptCard(w, event.cardId)
+      return
+    case 'snare_sprung':
+      w.u8(event.player)
+      w.varuint(event.uid)
+      writeId(w, event.cardId)
+      return
+    case 'oath_sworn':
+      w.u8(event.player)
+      w.varuint(event.uid)
+      writeId(w, event.cardId)
+      w.varuint(event.goal)
+      return
+    case 'oath_progress':
+      w.u8(event.player)
+      w.varuint(event.uid)
+      w.varuint(event.progress)
+      return
+    case 'oath_fulfilled':
       w.u8(event.player)
       w.varuint(event.uid)
       return
@@ -450,6 +513,16 @@ function readEvent(r: ByteReader): ViewEvent {
       return { type, player: readPlayer(r), uid: r.varuint(), cardId: readId(r, 'card'), charges: r.varuint() }
     case 'holding_activated':
     case 'holding_destroyed':
+      return { type, player: readPlayer(r), uid: r.varuint() }
+    case 'snare_set':
+      return { type, player: readPlayer(r), uid: r.varuint(), cardId: readOptCard(r) }
+    case 'snare_sprung':
+      return { type, player: readPlayer(r), uid: r.varuint(), cardId: readId(r, 'card') }
+    case 'oath_sworn':
+      return { type, player: readPlayer(r), uid: r.varuint(), cardId: readId(r, 'card'), goal: r.varuint() }
+    case 'oath_progress':
+      return { type, player: readPlayer(r), uid: r.varuint(), progress: r.varuint() }
+    case 'oath_fulfilled':
       return { type, player: readPlayer(r), uid: r.varuint() }
     case 'attacked':
       return { type, player: readPlayer(r), attackerUid: r.varuint(), target: readTarget(r) }

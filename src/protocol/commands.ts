@@ -18,6 +18,8 @@ export const COMMAND_SCHEMAS = {
   surrender: { id: 8, fields: [['commandId', 'string']] },
   place: { id: 9, fields: [['commandId', 'string'], ['handIndex', 'uint']] },
   activate: { id: 10, fields: [['commandId', 'string'], ['holdingUid', 'uint'], ['targetUid', 'optuint']] },
+  set: { id: 11, fields: [['commandId', 'string'], ['handIndex', 'uint']] },
+  swear: { id: 12, fields: [['commandId', 'string'], ['handIndex', 'uint']] },
 } as const satisfies Record<Command['type'], MessageSchema>
 
 export type DecodedCommand = Readonly<{ sequence: number, commandId: string, command: Command }>
@@ -78,6 +80,9 @@ function toValues(commandId: string, command: Command): WireValues {
       return { commandId, handIndex: command.handIndex }
     case 'activate':
       return { commandId, holdingUid: command.holdingUid, targetUid: command.targetUid }
+    case 'set':
+    case 'swear':
+      return { commandId, handIndex: command.handIndex }
     case 'attack':
       return { commandId, attackerUid: command.attackerUid, ...targetValues(command.target) }
     case 'hero_attack':
@@ -102,6 +107,9 @@ function fromValues(type: Command['type'], values: WireValues): Command {
       return { type, handIndex: requireNumber(values, 'handIndex') }
     case 'activate':
       return { type, holdingUid: requireNumber(values, 'holdingUid'), ...withTarget(optionalNumber(values, 'targetUid')) }
+    case 'set':
+    case 'swear':
+      return { type, handIndex: requireNumber(values, 'handIndex') }
     case 'attack':
       return { type, attackerUid: requireNumber(values, 'attackerUid'), target: readTarget(values) }
     case 'hero_attack':
