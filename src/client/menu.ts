@@ -11,6 +11,7 @@ export type MenuActions = Readonly<{
   play: (mode: 'casual' | 'ranked') => void
   openDecks: () => void
   signOut: () => void
+  openCollection: () => void
 }>
 
 const MAX_LINES = 8
@@ -79,6 +80,7 @@ export class MenuController {
       button('daily', 'Claim daily pack', () => void this.claimDaily(), idle),
       button('open', 'Open a pack', () => void this.openPack(), idle && this.packs > 0),
       button('decks', 'Build decks', () => this.actions.openDecks(), idle),
+      button('collection', 'Collection and crafting', () => this.actions.openCollection(), idle),
       button('sign-out', 'Sign out', () => this.actions.signOut(), idle),
       spacer(),
       ...this.lines.map((line) => label(line)),

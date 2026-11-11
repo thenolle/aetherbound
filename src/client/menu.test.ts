@@ -18,7 +18,7 @@ function fake(responses: Record<string, unknown>) {
   return { api, calls }
 }
 
-const noActions: MenuActions = { play: () => undefined, signOut: () => undefined, openDecks: () => undefined }
+const noActions: MenuActions = { play: () => undefined, signOut: () => undefined, openDecks: () => undefined, openCollection: () => undefined }
 
 describe('MenuController', () => {
   test('loads the balances and only offers to open a pack when one is available', async () => {
@@ -27,7 +27,6 @@ describe('MenuController', () => {
     await menu.refresh()
     expect(textsOf(menu.build())).toContain('Packs: 0    Dust: 15')
     expect(findButton(menu.build(), 'open')?.enabled).toBe(false)
-
     const withPack = fake({ 'GET /api/collection': { cards: [], packs: 2, dust: 0 } })
     const richer = new MenuController(withPack.api, 'Mireille', noActions, () => undefined)
     await richer.refresh()
@@ -40,7 +39,6 @@ describe('MenuController', () => {
     await menu.claimDaily()
     expect(textsOf(menu.build())).toContain('Daily pack claimed.')
     expect(textsOf(menu.build())).toContain('Packs: 1    Dust: 0')
-
     const again = fake({ 'POST /api/packs/daily': { claimed: false, packs: 1, dust: 0 } })
     const second = new MenuController(again.api, 'M', noActions, () => undefined)
     await second.claimDaily()
@@ -85,12 +83,11 @@ describe('MenuController', () => {
       get: () => new Promise((resolve) => { release = () => resolve({ packs: 0, dust: 0 }) }),
       post: async () => null
     }
-    const actions: MenuActions = { play: (mode) => played.push(mode), signOut: () => played.push('out'), openDecks: () => undefined }
+    const actions: MenuActions = { play: (mode) => played.push(mode), signOut: () => played.push('out'), openDecks: () => undefined, openCollection: () => undefined }
     const menu = new MenuController(api, 'M', actions, () => undefined)
     findButton(menu.build(), 'play-ranked')?.onPress()
     findButton(menu.build(), 'sign-out')?.onPress()
     expect(played).toEqual(['ranked', 'out'])
-
     const pending = menu.refresh()
     expect(findButton(menu.build(), 'play-casual')?.enabled).toBe(false)
     release()

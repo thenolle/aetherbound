@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { cid, fixtureHero, fixtureRegistry, makeCard } from '../rules/test-fixtures'
 import { createRegistry } from '../shared/cards'
 import { parseId } from '../shared/ids'
-import { findButton, findList, textsOf } from '../ui/nodes'
+import { findButton, findInput, findList, textsOf } from '../ui/nodes'
 import { DeckBuilder } from './decks'
 import type { Api } from './menu'
 
@@ -101,7 +101,6 @@ describe('DeckBuilder', () => {
     save?.onPress()
     await Promise.resolve()
     await new Promise((resolve) => setTimeout(resolve, 0))
-
     expect(posts.map((post) => post.path)).toEqual(['/api/decks', '/api/decks/active?id=deck-new'])
     const sent = posts[0]?.body as { name: string, hero: string, cards: string[] }
     expect(sent).toMatchObject({ name: "Test Hero's deck", hero: fixtureHero.id })
@@ -119,5 +118,21 @@ describe('DeckBuilder', () => {
     expect(findList(instance.build(), 'deck')?.items.map((item) => item.left)).toEqual(['1 Test Card 1'])
     expect(findList(instance.build(), 'pool')?.items.map((item) => item.left)).toContain('5 Test Card 5')
     expect(findList(instance.build(), 'pool')?.items.map((item) => item.left)).not.toContain('4 Test Card 4')
+  })
+
+  test('a typed deck name is what gets saved', async () => {
+    const { instance, posts } = builder(fixtureRegistry, {
+      'GET /api/collection': { cards: Array.from({ length: 15 }, (_, index) => ({ id: cid(index + 1), copies: 2 })) },
+      'POST /api/decks': { deck: { id: 'deck-new', name: 'Tax Season' } },
+      'POST /api/decks/active?id=deck-new': {}
+    }, [fixtureHero])
+    await instance.load()
+    for (let pass = 0; pass < 2; pass += 1) {
+      for (let index = 0; index < 15; index += 1) findList(instance.build(), 'pool')?.onActivate(index)
+    }
+    findInput(instance.build(), 'deck-name')?.onChange('  Tax Season ')
+    findButton(instance.build(), 'save')?.onPress()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect((posts[0]?.body as { name: string }).name).toBe('Tax Season')
   })
 })

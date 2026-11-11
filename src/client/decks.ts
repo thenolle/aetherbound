@@ -3,7 +3,7 @@ import { validateDeck } from '../shared/deck'
 import type { DeckIssue } from '../shared/deck'
 import { parseId } from '../shared/ids'
 import { GAME_LIMITS } from '../shared/lexicon'
-import { button, column, label, list, row } from '../ui/nodes'
+import { button, column, input, label, list, row } from '../ui/nodes'
 import type { ListItem, UiNode } from '../ui/nodes'
 import { fieldOf, textOf } from './json'
 import type { Api } from './menu'
@@ -17,7 +17,6 @@ export type DeckBuilderDeps = Readonly<{
 }>
 
 const byCostThenName = (a: CardDefinition, b: CardDefinition): number => a.cost - b.cost || a.name.en.localeCompare(b.name.en)
-
 const capOf = (card: CardDefinition): number => (card.unique ? GAME_LIMITS.maxUniqueCopies : GAME_LIMITS.maxCopies)
 
 function describeIssue(issue: DeckIssue, total: number): string {
@@ -31,7 +30,7 @@ export class DeckBuilder {
   private counts = new Map<string, number>()
   private heroIndex = 0
   private deckId: string | null = null
-  private deckName: string | null = null
+  private name = ''
   private message = ''
   private busy = false
   private poolSelected = 0
@@ -63,7 +62,7 @@ export class DeckBuilder {
       const heroIndex = this.deps.heroes.findIndex((hero) => hero.id === textOf(saved, 'heroId'))
       this.heroIndex = Math.max(0, heroIndex)
       this.deckId = textOf(saved, 'id')
-      this.deckName = textOf(saved, 'name')
+      this.name = textOf(saved, 'name') ?? ''
       this.counts = new Map()
       const ids = fieldOf(saved, 'cards')
       if (Array.isArray(ids)) {
@@ -90,28 +89,33 @@ export class DeckBuilder {
       label('DECK BUILDER', { tone: 'accent', size: 24 }),
       label(hero === undefined ? 'No hero available' : `${hero.name.en}, ${hero.title.en}     Cards: ${this.total()}/${GAME_LIMITS.deckSize}`),
       label(problems.length === 0 ? 'The deck is legal.' : `Not yet legal: ${problems.join('; ')}`, { tone: problems.length === 0 ? 'accent' : 'warn', size: 14 }),
-      row(
-        [
-          column([
-            label('Collection (Enter adds a copy)', { tone: 'dim', size: 13 }),
-            list('pool', poolItems, this.poolSelected, { onSelect: (index) => this.selectPool(index), onActivate: (index) => this.add(index) })
-          ], { gap: 6 }),
-          column([
-            label('Deck (Enter removes a copy)', { tone: 'dim', size: 13 }),
-            list('deck', deckItems, this.deckSelected, { onSelect: (index) => this.selectDeck(index), onActivate: (index) => this.remove(index) })
-          ], { gap: 6 })
-        ],
-        { gap: 16, flex: 1 }
-      ),
-      row(
-        [
-          button('hero', 'Change hero', () => this.cycleHero(), idle && this.deps.heroes.length > 1),
-          button('save', 'Save and use', () => void this.save(), idle && problems.length === 0),
-          button('clear', 'Clear deck', () => this.clear(), idle),
-          button('back', 'Back', () => this.back(), idle)
-        ],
-        { gap: 8 }
-      ),
+      row([
+        label('Name', { tone: 'dim', size: 14 }),
+        input('deck-name', 'Deck name', this.name, {
+          placeholder: hero === undefined ? 'Deck name' : `${hero.name.en}'s deck`,
+          onChange: (value) => {
+            this.name = value
+            this.deps.onChange()
+          },
+          onSubmit: () => void this.save()
+        })
+      ], { gap: 10 }),
+      row([
+        column([
+          label('Collection (Enter adds a copy)', { tone: 'dim', size: 13 }),
+          list('pool', poolItems, this.poolSelected, { title: 'Collection', onSelect: (index) => this.selectPool(index), onActivate: (index) => this.add(index) })
+        ], { gap: 6 }),
+        column([
+          label('Deck (Enter removes a copy)', { tone: 'dim', size: 13 }),
+          list('deck', deckItems, this.deckSelected, { title: 'Deck', onSelect: (index) => this.selectDeck(index), onActivate: (index) => this.remove(index) })
+        ], { gap: 6 })
+      ], { gap: 16, flex: 1 }),
+      row([
+        button('hero', 'Change hero', () => this.cycleHero(), idle && this.deps.heroes.length > 1),
+        button('save', 'Save and use', () => void this.save(), idle && problems.length === 0),
+        button('clear', 'Clear deck', () => this.clear(), idle),
+        button('back', 'Back', () => this.back(), idle)
+      ], { gap: 8 }),
       label(this.message, { tone: 'dim', size: 14 })
     ], { padding: 24, gap: 10 })
   }
@@ -122,7 +126,7 @@ export class DeckBuilder {
     await this.run(async () => {
       const body = {
         ...(this.deckId === null ? {} : { id: this.deckId }),
-        name: this.deckName ?? `${hero.name.en}'s deck`,
+        name: this.name.trim() === '' ? `${hero.name.en}'s deck` : this.name.trim(),
         hero: hero.id,
         cards: this.expanded()
       }
@@ -133,7 +137,7 @@ export class DeckBuilder {
         return
       }
       this.deckId = id
-      this.deckName = textOf(deck, 'name') ?? this.deckName
+      this.name = textOf(deck, 'name') ?? this.name
       const active = await this.deps.api.post(`/api/decks/active?id=${encodeURIComponent(id)}`)
       this.message = active === null ? 'Saved, but it could not be set as your active deck.' : 'Saved and set as your active deck.'
     })
@@ -228,7 +232,7 @@ export class DeckBuilder {
       if (card === undefined || !this.allowed(card)) this.counts.delete(id)
     }
     this.deckId = null
-    this.deckName = null
+    this.name = ''
     this.poolSelected = 0
     this.deckSelected = 0
     this.message = 'Switched hero: cards the new hero cannot use were removed.'
