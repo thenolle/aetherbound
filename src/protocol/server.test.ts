@@ -41,6 +41,7 @@ const ALL_EVENTS: readonly ViewEvent[] = [
   { type: 'oath_sworn', player: 0, uid: 12, cardId: cid(10), goal: 3 },
   { type: 'oath_progress', player: 0, uid: 12, progress: 1 },
   { type: 'oath_fulfilled', player: 0, uid: 12 },
+  { type: 'frozen', player: 1, uid: 5 },
 ]
 
 const eventsMessage: ServerMessage = {
@@ -52,26 +53,23 @@ function richState() {
   const state = createMatch(fixtureSetup(3)).state
   state.players[0].weapon = { cardId: cid(1), attack: 2, durability: 1 }
   state.players[0].tariff = 1
-  state.players[0].board = [
-    {
-      uid: 1,
-      cardId: cid(2),
-      attack: 2,
-      health: 1,
-      maxHealth: 2,
-      exhausted: true,
-      keywords: ['shield-wall', 'haste'],
-      onDeath: [
-        { kind: 'damage', amount: 1, target: 'enemy-hero' },
-        { kind: 'draw', count: 1 },
-        { kind: 'tariff', amount: 2 },
-        { kind: 'heal', amount: 3, target: 'all-enemy-minions' }
-      ]
-    }
-  ]
-  state.players[1].board = [
-    { uid: 2, cardId: cid(3), attack: 3, health: 3, maxHealth: 3, exhausted: false, keywords: [], onDeath: [] }
-  ]
+  state.players[0].board = [{
+    uid: 1,
+    cardId: cid(2),
+    attack: 2,
+    health: 1,
+    maxHealth: 2,
+    exhausted: true,
+    keywords: ['shield-wall', 'haste'],
+    onDeath: [
+      { kind: 'damage', amount: 1, target: 'enemy-hero' },
+      { kind: 'draw', count: 1 },
+      { kind: 'tariff', amount: 2 },
+      { kind: 'heal', amount: 3, target: 'all-enemy-minions' },
+      { kind: 'freeze', target: 'all-enemy-minions' },
+    ]
+  }]
+  state.players[1].board = [{ uid: 2, cardId: cid(3), attack: 3, health: 3, maxHealth: 3, exhausted: false, keywords: [], onDeath: [] }]
   state.players[1].heroHealth = -3
   state.winner = 0
   state.players[0].holdings = [{ uid: 6, cardId: cid(6), charges: 2, used: true }]
@@ -79,12 +77,12 @@ function richState() {
   state.players[0].snares = [{ uid: 10, cardId: cid(8) }]
   state.players[1].snares = [{ uid: 11, cardId: cid(9) }]
   state.players[0].oaths = [{ uid: 12, cardId: cid(10), progress: 1, goal: 3 }]
+  const chilled = state.players[1].board[0]
+  if (chilled !== undefined) chilled.frozen = true
   return state
 }
 
-const frameOf = (id: number, ...payload: number[]): Uint8Array =>
-  new Uint8Array([0xae, 0x01, 0x00, id, 0x00, payload.length, ...payload])
-
+const frameOf = (id: number, ...payload: number[]): Uint8Array =>new Uint8Array([0xae, 0x01, 0x00, id, 0x00, payload.length, ...payload])
 const outcome = (data: Uint8Array): 'ok' | ProtocolErrorCode => {
   try {
     decodeServerFrame(data)

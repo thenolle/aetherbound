@@ -41,12 +41,12 @@ export type CardRegistry = ReadonlyMap<string, CardDefinition>
 type Fail = (reason: string) => never
 
 function checkEffects(effects: readonly Effect[], fail: Fail): void {
-  if (effects.length === 0 || effects.length > MAX_EFFECTS_PER_CARD) {
-    fail(`effects need 1 to ${MAX_EFFECTS_PER_CARD} entries`)
-  }
+  if (effects.length === 0 || effects.length > MAX_EFFECTS_PER_CARD) fail(`effects need 1 to ${MAX_EFFECTS_PER_CARD} entries`)
   for (const effect of effects) {
     if (effect.kind === 'draw') {
       if (!Number.isInteger(effect.count) || effect.count < 1 || effect.count > 10) fail('draw count must be 1 to 10')
+    } else if (effect.kind === 'freeze') {
+      if (effect.target !== 'chosen-enemy-minion' && effect.target !== 'all-enemy-minions') fail('freeze needs an enemy minion target')
     } else if (!Number.isInteger(effect.amount) || effect.amount < 1 || effect.amount > 99) {
       fail('effect amount must be 1 to 99')
     }
@@ -56,14 +56,10 @@ function checkEffects(effects: readonly Effect[], fail: Fail): void {
 const validCost = (cost: number): boolean => Number.isInteger(cost) && cost >= 0 && cost <= GAME_LIMITS.aetherPressureMax
 
 function assertCardDefinition(card: CardDefinition): void {
-  const fail: Fail = (reason) => {
-    throw new DomainError('invalid_content', `card ${card.id}: ${reason}`)
-  }
+  const fail: Fail = (reason) => { throw new DomainError('invalid_content', `card ${card.id}: ${reason}`) }
   if (!validCost(card.cost)) fail(`cost must be an integer between 0 and ${GAME_LIMITS.aetherPressureMax}`)
   if (card.keywords !== undefined && card.family !== 'bound') fail('only bound cards carry keywords')
-  if ((card.onPlay !== undefined || card.onDeath !== undefined) && card.family !== 'bound') {
-    fail('only bound cards carry triggers')
-  }
+  if ((card.onPlay !== undefined || card.onDeath !== undefined) && card.family !== 'bound') fail('only bound cards carry triggers')
   if (card.family === 'bound') {
     if (card.attack === undefined || !Number.isInteger(card.attack) || card.attack < 0) fail('bound cards need an integer attack >= 0')
     if (card.health === undefined || !Number.isInteger(card.health) || card.health < 1) fail('bound cards need an integer health >= 1')
@@ -95,9 +91,7 @@ function assertCardDefinition(card: CardDefinition): void {
 }
 
 export function assertHeroDefinition(hero: HeroDefinition): void {
-  const fail: Fail = (reason) => {
-    throw new DomainError('invalid_content', `hero ${hero.id}: ${reason}`)
-  }
+  const fail: Fail = (reason) => { throw new DomainError('invalid_content', `hero ${hero.id}: ${reason}`) }
   if (!Number.isInteger(hero.health) || hero.health < 1 || hero.health > 99) fail('health must be an integer between 1 and 99')
   if (!validCost(hero.ability.cost)) fail(`ability cost must be an integer between 0 and ${GAME_LIMITS.aetherPressureMax}`)
   checkEffects(hero.ability.effects, fail)

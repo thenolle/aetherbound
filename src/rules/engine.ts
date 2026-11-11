@@ -11,20 +11,18 @@ import { VERSIONS } from '../shared/versions'
 import { RULES } from './constants'
 import type { AttackTarget, Command, GameEvent, Holding, MatchState, Minion, PlayerIndex, PlayerState } from './types'
 
-export type PlayerSetup = Readonly<{ hero: HeroDefinition, deck: readonly Id<'card'>[] }>
-
 export type MatchSetup = Readonly<{
   seed: number
   players: readonly [PlayerSetup, PlayerSetup]
   registry: CardRegistry
 }>
 
+export type PlayerSetup = Readonly<{ hero: HeroDefinition, deck: readonly Id<'card'>[] }>
 export type StepResult = Readonly<{ state: MatchState, events: readonly GameEvent[] }>
 
 const PLAYERS = [0, 1] as const
 
 export const other = (player: PlayerIndex): PlayerIndex => (player === 0 ? 1 : 0)
-
 const invalid = (message: string): DomainError => new DomainError('invalid_command', message)
 
 function resolveGameOver(state: MatchState, events: GameEvent[]): void {
@@ -78,7 +76,11 @@ function startTurn(state: MatchState, events: GameEvent[]): void {
   events.push({ type: 'turn_started', player: state.active, turn: state.turn, aether: side.aether })
   drawCard(state, state.active, events)
   if (state.winner === null) {
-    for (const minion of side.board) minion.exhausted = false
+    for (const minion of side.board) {
+      const frozen = minion.frozen === true
+      minion.exhausted = frozen
+      if (frozen) delete minion.frozen
+    }
   }
 }
 
@@ -87,13 +89,7 @@ function passTurn(state: MatchState, events: GameEvent[]): void {
   startTurn(state, events)
 }
 
-function applyEffect(
-  state: MatchState,
-  caster: PlayerIndex,
-  effect: Effect,
-  chosen: Minion | undefined,
-  events: GameEvent[]
-): void {
+function applyEffect(state: MatchState, caster: PlayerIndex, effect: Effect, chosen: Minion | undefined, events: GameEvent[]): void {
   const foe = other(caster)
   if (effect.kind === 'draw') {
     for (let count = 0; count < effect.count && state.winner === null; count += 1) drawCard(state, caster, events)
@@ -104,14 +100,24 @@ function applyEffect(
     events.push({ type: 'taxed', player: foe, amount: effect.amount })
     return
   }
+  if (effect.kind === 'freeze') {
+    const chill = (minion: Minion): void => {
+      minion.frozen = true
+      events.push({ type: 'frozen', player: foe, uid: minion.uid })
+    }
+    if (effect.target === 'chosen-enemy-minion') {
+      if (chosen !== undefined) chill(chosen)
+    } else if (effect.target === 'all-enemy-minions') {
+      for (const minion of state.players[foe].board) chill(minion)
+    }
+    return
+  }
   const amount = effect.amount
   const harmful = effect.kind === 'damage'
-
   const affectHero = (player: PlayerIndex): void => {
     if (harmful) damageHero(state, player, amount, events)
     else healHero(state, player, amount, events)
   }
-
   const affectMinion = (player: PlayerIndex, minion: Minion): void => {
     if (harmful) {
       minion.health -= amount
@@ -123,7 +129,6 @@ function applyEffect(
     minion.health += gained
     events.push({ type: 'healed', player, uid: minion.uid, amount: gained })
   }
-
   switch (effect.target) {
     case 'enemy-hero':
       affectHero(foe)
@@ -140,13 +145,7 @@ function applyEffect(
   }
 }
 
-function runEffects(
-  state: MatchState,
-  caster: PlayerIndex,
-  effects: readonly Effect[],
-  chosen: Minion | undefined,
-  events: GameEvent[]
-): void {
+function runEffects(state: MatchState, caster: PlayerIndex, effects: readonly Effect[], chosen: Minion | undefined, events: GameEvent[]): void {
   for (const effect of effects) {
     if (state.winner !== null) break
     applyEffect(state, caster, effect, chosen, events)
@@ -177,9 +176,7 @@ function settleBoards(state: MatchState, events: GameEvent[]): void {
 
 function takeHandCard(state: MatchState, handIndex: number, registry: CardRegistry) {
   const side = state.players[state.active]
-  if (!Number.isInteger(handIndex) || handIndex < 0 || handIndex >= side.hand.length) {
-    throw invalid('hand index out of range')
-  }
+  if (!Number.isInteger(handIndex) || handIndex < 0 || handIndex >= side.hand.length) throw invalid('hand index out of range')
   const cardId = side.hand[handIndex]
   const card = cardId === undefined ? undefined : registry.get(cardId)
   if (cardId === undefined || card === undefined) throw new DomainError('internal', 'card missing from registry')
@@ -206,46 +203,27 @@ function checkAttackTarget(defenderSide: PlayerState, target: AttackTarget): Min
   if (target.kind === 'minion') {
     const defender = defenderSide.board.find((minion) => minion.uid === target.uid)
     if (defender === undefined) throw new DomainError('illegal_target', 'target minion not found')
-    if (walls.length > 0 && !defender.keywords.includes('shield-wall')) {
-      throw new DomainError('illegal_target', 'a shield-wall must be attacked first')
-    }
+    if (walls.length > 0 && !defender.keywords.includes('shield-wall')) throw new DomainError('illegal_target', 'a shield-wall must be attacked first')
     return defender
   }
   throw invalid('unknown target kind')
 }
 
-function playCard(
-  state: MatchState,
-  command: Extract<Command, { type: 'play' }>,
-  registry: CardRegistry,
-  events: GameEvent[]
-): void {
+function playCard(state: MatchState, command: Extract<Command, { type: 'play' }>, registry: CardRegistry, events: GameEvent[]): void {
   const caster = state.active
   const side = state.players[caster]
   const { cardId, card } = takeHandCard(state, command.handIndex, registry)
-  if (!Number.isInteger(command.position) || command.position < 0 || command.position > side.board.length) {
-    throw invalid('board position out of range')
-  }
+  if (!Number.isInteger(command.position) || command.position < 0 || command.position > side.board.length) throw invalid('board position out of range')
   if (card.family !== 'bound') throw invalid('only bound cards can be played onto a ward')
   if (card.cost > side.aether) throw new DomainError('insufficient_aether', 'not enough Aether Pressure')
   if (side.board.length >= GAME_LIMITS.boardSlots) throw new DomainError('board_full', 'all seven wards are occupied')
   if (card.attack === undefined || card.health === undefined) throw new DomainError('internal', 'bound card without stats')
   const trigger = card.onPlay ?? []
   const chosen = pickTarget(state, trigger, command.targetUid)
-
   const keywords = [...(card.keywords ?? [])]
   side.aether -= card.cost
   side.hand.splice(command.handIndex, 1)
-  const minion: Minion = {
-    uid: state.nextUid,
-    cardId,
-    attack: card.attack,
-    health: card.health,
-    maxHealth: card.health,
-    exhausted: !keywords.includes('haste'),
-    keywords,
-    onDeath: [...(card.onDeath ?? [])]
-  }
+  const minion: Minion = { uid: state.nextUid, cardId, attack: card.attack, health: card.health, maxHealth: card.health, exhausted: !keywords.includes('haste'), keywords, onDeath: [...(card.onDeath ?? [])] }
   state.nextUid += 1
   side.board.splice(command.position, 0, minion)
   events.push({ type: 'minion_played', player: caster, uid: minion.uid, cardId, position: command.position })
@@ -254,12 +232,7 @@ function playCard(
   settleBoards(state, events)
 }
 
-function castWrit(
-  state: MatchState,
-  command: Extract<Command, { type: 'cast' }>,
-  registry: CardRegistry,
-  events: GameEvent[]
-): void {
+function castWrit(state: MatchState, command: Extract<Command, { type: 'cast' }>, registry: CardRegistry, events: GameEvent[]): void {
   const caster = state.active
   const side = state.players[caster]
   const { cardId, card } = takeHandCard(state, command.handIndex, registry)
@@ -268,7 +241,6 @@ function castWrit(
   if (effects.length === 0) throw new DomainError('internal', 'writ without effects')
   if (card.cost > side.aether) throw new DomainError('insufficient_aether', 'not enough Aether Pressure')
   const chosen = pickTarget(state, effects, command.targetUid)
-
   side.aether -= card.cost
   side.hand.splice(command.handIndex, 1)
   events.push({ type: 'writ_cast', player: caster, cardId })
@@ -276,35 +248,24 @@ function castWrit(
   settleBoards(state, events)
 }
 
-function equipIron(
-  state: MatchState,
-  command: Extract<Command, { type: 'equip' }>,
-  registry: CardRegistry,
-  events: GameEvent[]
-): void {
+function equipIron(state: MatchState, command: Extract<Command, { type: 'equip' }>, registry: CardRegistry, events: GameEvent[]): void {
   const side = state.players[state.active]
   const { cardId, card } = takeHandCard(state, command.handIndex, registry)
   if (card.family !== 'iron') throw invalid('only irons can be equipped')
   if (card.attack === undefined || card.durability === undefined) throw new DomainError('internal', 'iron without stats')
   if (card.cost > side.aether) throw new DomainError('insufficient_aether', 'not enough Aether Pressure')
-
   side.aether -= card.cost
   side.hand.splice(command.handIndex, 1)
   side.weapon = { cardId, attack: card.attack, durability: card.durability }
   events.push({ type: 'iron_equipped', player: state.active, cardId, attack: card.attack, durability: card.durability })
 }
 
-function useHeroAbility(
-  state: MatchState,
-  command: Extract<Command, { type: 'hero_ability' }>,
-  events: GameEvent[]
-): void {
+function useHeroAbility(state: MatchState, command: Extract<Command, { type: 'hero_ability' }>, events: GameEvent[]): void {
   const caster = state.active
   const side = state.players[caster]
   if (side.abilityUsed) throw invalid('the hero ability was already used this turn')
   if (side.ability.cost > side.aether) throw new DomainError('insufficient_aether', 'not enough Aether Pressure')
   const chosen = pickTarget(state, side.ability.effects, command.targetUid)
-
   side.aether -= side.ability.cost
   side.abilityUsed = true
   events.push({ type: 'ability_used', player: caster })
@@ -312,19 +273,13 @@ function useHeroAbility(
   settleBoards(state, events)
 }
 
-function placeHolding(
-  state: MatchState,
-  command: Extract<Command, { type: 'place' }>,
-  registry: CardRegistry,
-  events: GameEvent[]
-): void {
+function placeHolding(state: MatchState, command: Extract<Command, { type: 'place' }>, registry: CardRegistry, events: GameEvent[]): void {
   const side = state.players[state.active]
   const { cardId, card } = takeHandCard(state, command.handIndex, registry)
   if (card.family !== 'holding') throw invalid('only holdings can be placed')
   if (card.durability === undefined) throw new DomainError('internal', 'holding without charges')
   if (card.cost > side.aether) throw new DomainError('insufficient_aether', 'not enough Aether Pressure')
   if (side.holdings.length >= RULES.holdingSlots) throw new DomainError('board_full', 'all holding slots are occupied')
-
   side.aether -= card.cost
   side.hand.splice(command.handIndex, 1)
   const holding: Holding = { uid: state.nextUid, cardId, charges: card.durability, used: false }
@@ -333,12 +288,7 @@ function placeHolding(
   events.push({ type: 'holding_placed', player: state.active, uid: holding.uid, cardId, charges: holding.charges })
 }
 
-function activateHolding(
-  state: MatchState,
-  command: Extract<Command, { type: 'activate' }>,
-  registry: CardRegistry,
-  events: GameEvent[]
-): void {
+function activateHolding(state: MatchState, command: Extract<Command, { type: 'activate' }>, registry: CardRegistry, events: GameEvent[]): void {
   const caster = state.active
   const side = state.players[caster]
   const holding = side.holdings.find((entry) => entry.uid === command.holdingUid)
@@ -347,7 +297,6 @@ function activateHolding(
   const effects = registry.get(holding.cardId)?.effects ?? []
   if (effects.length === 0) throw new DomainError('internal', 'holding without effects')
   const chosen = pickTarget(state, effects, command.targetUid)
-
   holding.used = true
   holding.charges -= 1
   events.push({ type: 'holding_activated', player: caster, uid: holding.uid })
@@ -366,18 +315,12 @@ const SNARE_TRIGGER_BY_COMMAND: Partial<Record<Command['type'], SnareTrigger>> =
   hero_attack: 'enemy-attack'
 }
 
-function setSnare(
-  state: MatchState,
-  command: Extract<Command, { type: 'set' }>,
-  registry: CardRegistry,
-  events: GameEvent[]
-): void {
+function setSnare(state: MatchState, command: Extract<Command, { type: 'set' }>, registry: CardRegistry, events: GameEvent[]): void {
   const side = state.players[state.active]
   const { cardId, card } = takeHandCard(state, command.handIndex, registry)
   if (card.family !== 'snare') throw invalid('only snares can be set')
   if (card.cost > side.aether) throw new DomainError('insufficient_aether', 'not enough Aether Pressure')
   if (side.snares.length >= RULES.snareSlots) throw new DomainError('board_full', 'all snare slots are occupied')
-
   side.aether -= card.cost
   side.hand.splice(command.handIndex, 1)
   const snare = { uid: state.nextUid, cardId }
@@ -398,19 +341,13 @@ function fireSnare(state: MatchState, trigger: SnareTrigger, registry: CardRegis
   runEffects(state, owner, registry.get(snare.cardId)?.effects ?? [], undefined, events)
 }
 
-function swearOath(
-  state: MatchState,
-  command: Extract<Command, { type: 'swear' }>,
-  registry: CardRegistry,
-  events: GameEvent[]
-): void {
+function swearOath(state: MatchState, command: Extract<Command, { type: 'swear' }>, registry: CardRegistry, events: GameEvent[]): void {
   const side = state.players[state.active]
   const { cardId, card } = takeHandCard(state, command.handIndex, registry)
   if (card.family !== 'oath') throw invalid('only oaths can be sworn')
   if (card.goal === undefined) throw new DomainError('internal', 'oath without a goal')
   if (card.cost > side.aether) throw new DomainError('insufficient_aether', 'not enough Aether Pressure')
   if (side.oaths.length >= RULES.oathSlots) throw new DomainError('board_full', 'an oath is already sworn')
-
   side.aether -= card.cost
   side.hand.splice(command.handIndex, 1)
   const oath = { uid: state.nextUid, cardId, progress: 0, goal: card.goal }
@@ -432,11 +369,7 @@ function advanceOaths(state: MatchState, player: PlayerIndex, registry: CardRegi
   }
 }
 
-function resolveAttack(
-  state: MatchState,
-  command: Extract<Command, { type: 'attack' }>,
-  events: GameEvent[]
-): void {
+function resolveAttack(state: MatchState, command: Extract<Command, { type: 'attack' }>, events: GameEvent[]): void {
   const attackerIndex = state.active
   const defenderIndex = other(attackerIndex)
   const attacker = state.players[attackerIndex].board.find((minion) => minion.uid === command.attackerUid)
@@ -444,7 +377,6 @@ function resolveAttack(
   if (attacker.exhausted) throw invalid('this minion cannot attack yet')
   if (attacker.attack <= 0) throw invalid('this minion has no attack')
   const defender = checkAttackTarget(state.players[defenderIndex], command.target)
-
   events.push({ type: 'attacked', player: attackerIndex, attackerUid: attacker.uid, target: command.target })
   attacker.exhausted = true
   if (defender === null) {
@@ -462,11 +394,7 @@ function resolveAttack(
   settleBoards(state, events)
 }
 
-function resolveHeroAttack(
-  state: MatchState,
-  command: Extract<Command, { type: 'hero_attack' }>,
-  events: GameEvent[]
-): void {
+function resolveHeroAttack(state: MatchState, command: Extract<Command, { type: 'hero_attack' }>, events: GameEvent[]): void {
   const attackerIndex = state.active
   const defenderIndex = other(attackerIndex)
   const side = state.players[attackerIndex]
@@ -474,7 +402,6 @@ function resolveHeroAttack(
   if (weapon === null) throw invalid('no iron is equipped')
   if (side.heroAttacked) throw invalid('the hero already attacked this turn')
   const defender = checkAttackTarget(state.players[defenderIndex], command.target)
-
   events.push({ type: 'hero_attacked', player: attackerIndex, target: command.target })
   side.heroAttacked = true
   if (defender === null) {
@@ -497,9 +424,7 @@ export function createMatch(setup: MatchSetup): StepResult {
   const build = (entry: PlayerSetup): PlayerState => {
     assertHeroDefinition(entry.hero)
     const issues = validateDeck(entry.deck, entry.hero.faction, setup.registry)
-    if (issues.length > 0) {
-      throw new DomainError('deck_invalid', `deck rejected: ${issues.map((issue) => issue.code).join(', ')}`)
-    }
+    if (issues.length > 0) throw new DomainError('deck_invalid', `deck rejected: ${issues.map((issue) => issue.code).join(', ')}`)
     return {
       heroId: entry.hero.id,
       heroHealth: entry.hero.health,
@@ -537,23 +462,16 @@ export function createMatch(setup: MatchSetup): StepResult {
   return { state, events }
 }
 
-export function applyCommand(
-  state: MatchState,
-  actor: PlayerIndex,
-  command: Command,
-  registry: CardRegistry
-): StepResult {
+export function applyCommand(state: MatchState, actor: PlayerIndex, command: Command, registry: CardRegistry): StepResult {
   if (state.winner !== null) throw invalid('the match is over')
   const next = structuredClone(state)
   const events: GameEvent[] = []
-
   if (command.type === 'surrender') {
     events.push({ type: 'surrendered', player: actor })
     next.winner = other(actor)
     events.push({ type: 'game_over', winner: next.winner })
     return { state: next, events }
   }
-
   if (actor !== next.active) throw new DomainError('not_your_turn', 'it is not your turn')
   switch (command.type) {
     case 'play':

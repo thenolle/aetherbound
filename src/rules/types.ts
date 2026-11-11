@@ -11,6 +11,7 @@ export type Minion = {
   health: number
   maxHealth: number
   exhausted: boolean
+  frozen?: boolean
   keywords: KeywordId[]
   onDeath: Effect[]
 }
@@ -118,3 +119,4 @@ export type GameEvent =
   | { type: 'oath_sworn', player: PlayerIndex, uid: number, cardId: Id<'card'>, goal: number }
   | { type: 'oath_progress', player: PlayerIndex, uid: number, progress: number }
   | { type: 'oath_fulfilled', player: PlayerIndex, uid: number }
+  | { type: 'frozen', player: PlayerIndex, uid: number }

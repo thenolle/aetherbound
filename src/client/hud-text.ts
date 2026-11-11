@@ -22,73 +22,43 @@ const targetText = (target: AttackTarget): string => (target.kind === 'hero' ? '
 
 function minionText(minion: Minion, registry: CardRegistry): string {
   const keywords = minion.keywords.length > 0 ? ` [${minion.keywords.join(',')}]` : ''
-  return `#${minion.uid} ${nameOf(registry, minion.cardId)} ${minion.attack}/${minion.health}${keywords}${minion.exhausted ? ' (rest)' : ''}`
+  return `#${minion.uid} ${nameOf(registry, minion.cardId)} ${minion.attack}/${minion.health}${keywords}${minion.exhausted ? ` (rest)${minion.frozen === true ? ' (frozen)' : ''}` : ''}`
 }
 
-function holdingText(holding: Holding, registry: CardRegistry): string {
-  return `#${holding.uid} ${nameOf(registry, holding.cardId)} x${holding.charges}${holding.used ? ' (used)' : ''}`
-}
-
-function oathText(oath: Oath, registry: CardRegistry): string {
-  return `#${oath.uid} ${nameOf(registry, oath.cardId)} ${oath.progress}/${oath.goal}`
-}
+function holdingText(holding: Holding, registry: CardRegistry): string { return `#${holding.uid} ${nameOf(registry, holding.cardId)} x${holding.charges}${holding.used ? ' (used)' : ''}` }
+function oathText(oath: Oath, registry: CardRegistry): string { return `#${oath.uid} ${nameOf(registry, oath.cardId)} ${oath.progress}/${oath.goal}` }
 
 export function describeEvent(event: ViewEvent, registry: CardRegistry): string {
   const who = (player: number): string => `P${player}`
   const card = (id: string | null): string => (id === null ? 'a card' : nameOf(registry, id))
   switch (event.type) {
-    case 'turn_started':
-      return `${who(event.player)} starts turn ${event.turn} with ${event.aether} Aether`
-    case 'turn_timed_out':
-      return `${who(event.player)} ran out of time`
-    case 'card_drawn':
-      return `${who(event.player)} draws ${card(event.cardId)}`
-    case 'card_burned':
-      return `${who(event.player)} burns ${card(event.cardId)}`
-    case 'fatigue':
-      return `${who(event.player)} suffers ${event.damage} fatigue`
-    case 'minion_played':
-      return `${who(event.player)} plays ${card(event.cardId)} as #${event.uid}`
-    case 'writ_cast':
-      return `${who(event.player)} casts ${card(event.cardId)}`
-    case 'iron_equipped':
-      return `${who(event.player)} equips ${card(event.cardId)} ${event.attack}/${event.durability}`
-    case 'iron_broken':
-      return `${who(event.player)} iron breaks`
-    case 'ability_used':
-      return `${who(event.player)} uses the hero ability`
-    case 'holding_placed':
-      return `${who(event.player)} places ${card(event.cardId)} as #${event.uid}`
-    case 'holding_activated':
-      return `${who(event.player)} activates holding #${event.uid}`
-    case 'holding_destroyed':
-      return `${who(event.player)} loses holding #${event.uid}`
-    case 'snare_set':
-      return `${who(event.player)} sets ${event.cardId === null ? 'a snare' : card(event.cardId)}`
-    case 'snare_sprung':
-      return `${who(event.player)} springs ${card(event.cardId)}`
-    case 'oath_sworn':
-      return `${who(event.player)} swears ${card(event.cardId)} (goal ${event.goal})`
-    case 'oath_progress':
-      return `${who(event.player)} oath #${event.uid} progress ${event.progress}`
-    case 'oath_fulfilled':
-      return `${who(event.player)} fulfils oath #${event.uid}`
-    case 'attacked':
-      return `${who(event.player)} #${event.attackerUid} attacks ${targetText(event.target)}`
-    case 'hero_attacked':
-      return `${who(event.player)} hero attacks ${targetText(event.target)}`
-    case 'damaged':
-      return `${event.uid === null ? `${who(event.player)} hero` : `#${event.uid}`} takes ${event.amount}`
-    case 'healed':
-      return `${event.uid === null ? `${who(event.player)} hero` : `#${event.uid}`} heals ${event.amount}`
-    case 'taxed':
-      return `${who(event.player)} is taxed ${event.amount} Aether next turn`
-    case 'minion_died':
-      return `#${event.uid} falls`
-    case 'surrendered':
-      return `${who(event.player)} surrenders`
-    case 'game_over':
-      return `${who(event.winner)} wins`
+    case 'turn_started': return `${who(event.player)} starts turn ${event.turn} with ${event.aether} Aether`
+    case 'turn_timed_out': return `${who(event.player)} ran out of time`
+    case 'card_drawn': return `${who(event.player)} draws ${card(event.cardId)}`
+    case 'card_burned': return `${who(event.player)} burns ${card(event.cardId)}`
+    case 'fatigue': return `${who(event.player)} suffers ${event.damage} fatigue`
+    case 'minion_played': return `${who(event.player)} plays ${card(event.cardId)} as #${event.uid}`
+    case 'writ_cast': return `${who(event.player)} casts ${card(event.cardId)}`
+    case 'iron_equipped': return `${who(event.player)} equips ${card(event.cardId)} ${event.attack}/${event.durability}`
+    case 'iron_broken': return `${who(event.player)} iron breaks`
+    case 'ability_used': return `${who(event.player)} uses the hero ability`
+    case 'holding_placed': return `${who(event.player)} places ${card(event.cardId)} as #${event.uid}`
+    case 'holding_activated': return `${who(event.player)} activates holding #${event.uid}`
+    case 'holding_destroyed': return `${who(event.player)} loses holding #${event.uid}`
+    case 'snare_set': return `${who(event.player)} sets ${event.cardId === null ? 'a snare' : card(event.cardId)}`
+    case 'snare_sprung': return `${who(event.player)} springs ${card(event.cardId)}`
+    case 'oath_sworn': return `${who(event.player)} swears ${card(event.cardId)} (goal ${event.goal})`
+    case 'oath_progress': return `${who(event.player)} oath #${event.uid} progress ${event.progress}`
+    case 'oath_fulfilled': return `${who(event.player)} fulfils oath #${event.uid}`
+    case 'frozen': return `#${event.uid} is frozen`
+    case 'attacked': return `${who(event.player)} #${event.attackerUid} attacks ${targetText(event.target)}`
+    case 'hero_attacked': return `${who(event.player)} hero attacks ${targetText(event.target)}`
+    case 'damaged': return `${event.uid === null ? `${who(event.player)} hero` : `#${event.uid}`} takes ${event.amount}`
+    case 'healed': return `${event.uid === null ? `${who(event.player)} hero` : `#${event.uid}`} heals ${event.amount}`
+    case 'taxed': return `${who(event.player)} is taxed ${event.amount} Aether next turn`
+    case 'minion_died': return `#${event.uid} falls`
+    case 'surrendered': return `${who(event.player)} surrenders`
+    case 'game_over': return `${who(event.winner)} wins`
   }
 }
 

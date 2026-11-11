@@ -56,25 +56,17 @@ export const EVENT_IDS = {
   oath_sworn: 24,
   oath_progress: 25,
   oath_fulfilled: 26,
+  frozen: 27,
 } as const satisfies Record<ViewEvent['type'], number>
 
-const MESSAGE_TYPE_BY_ID = new Map<number, ServerMessage['type']>(
-  (Object.keys(MESSAGE_IDS) as ServerMessage['type'][]).map((type) => [MESSAGE_IDS[type], type])
-)
-
-const EVENT_TYPE_BY_ID = new Map<number, ViewEvent['type']>(
-  (Object.keys(EVENT_IDS) as ViewEvent['type'][]).map((type) => [EVENT_IDS[type], type])
-)
-
+const MESSAGE_TYPE_BY_ID = new Map<number, ServerMessage['type']>((Object.keys(MESSAGE_IDS) as ServerMessage['type'][]).map((type) => [MESSAGE_IDS[type], type]))
+const EVENT_TYPE_BY_ID = new Map<number, ViewEvent['type']>((Object.keys(EVENT_IDS) as ViewEvent['type'][]).map((type) => [EVENT_IDS[type], type]))
 const EFFECT_TARGETS: readonly EffectTarget[] = ['enemy-hero', 'own-hero', 'chosen-enemy-minion', 'all-enemy-minions']
 
 type SharedSide = Omit<PlayerState, 'deck' | 'hand' | 'snares'> & { deckCount: number }
 
 const malformed = (message: string): ProtocolError => new ProtocolError('malformed', message)
-
-function writeBool(w: ByteWriter, value: boolean): void {
-  w.u8(value ? 1 : 0)
-}
+function writeBool(w: ByteWriter, value: boolean): void { w.u8(value ? 1 : 0) }
 
 function readBool(r: ByteReader): boolean {
   const value = r.u8()
@@ -98,17 +90,10 @@ function readWinner(r: ByteReader): PlayerIndex | null {
 
 const winnerByte = (winner: PlayerIndex | null): number => (winner === null ? 0 : winner + 1)
 
-function writeId(w: ByteWriter, id: string): void {
-  w.string(id, MAX_ID_BYTES)
-}
-
+function writeId(w: ByteWriter, id: string): void { w.string(id, MAX_ID_BYTES) }
 function readId<K extends 'card' | 'hero'>(r: ByteReader, kind: K): Id<K> {
   const raw = r.string(MAX_ID_BYTES)
-  try {
-    return parseId(kind, raw)
-  } catch {
-    throw malformed(`invalid ${kind} id`)
-  }
+  try { return parseId(kind, raw) } catch { throw malformed(`invalid ${kind} id`) }
 }
 
 function writeOptUid(w: ByteWriter, uid: number | null): void {
@@ -181,6 +166,10 @@ function writeEffect(w: ByteWriter, effect: Effect): void {
       w.varuint(effect.amount)
       w.u8(EFFECT_TARGETS.indexOf(effect.target))
       return
+    case 'freeze':
+      w.u8(4)
+      w.u8(EFFECT_TARGETS.indexOf(effect.target))
+      return
     case 'draw':
       w.u8(2)
       w.varuint(effect.count)
@@ -202,6 +191,11 @@ function readEffect(r: ByteReader): Effect {
   }
   if (kind === 2) return { kind: 'draw', count: r.varuint() }
   if (kind === 3) return { kind: 'tariff', amount: r.varuint() }
+  if (kind === 4) {
+    const target = EFFECT_TARGETS[r.u8()]
+    if (target === undefined) throw malformed('invalid effect target')
+    return { kind: 'freeze', target }
+  }
   throw malformed('invalid effect kind')
 }
 
@@ -212,6 +206,7 @@ function writeMinion(w: ByteWriter, minion: Minion): void {
   w.varint(minion.health)
   w.varuint(minion.maxHealth)
   writeBool(w, minion.exhausted)
+  writeBool(w, minion.frozen === true)
   writeList(w, minion.keywords, (keyword) => w.u8(KEYWORD_IDS.indexOf(keyword)))
   writeList(w, minion.onDeath, (effect) => writeEffect(w, effect))
 }
@@ -223,13 +218,14 @@ function readMinion(r: ByteReader): Minion {
   const health = r.varint()
   const maxHealth = r.varuint()
   const exhausted = readBool(r)
+  const frozen = readBool(r)
   const keywords = readList<KeywordId>(r, () => {
     const keyword = KEYWORD_IDS[r.u8()]
     if (keyword === undefined) throw malformed('invalid keyword')
     return keyword
   })
   const onDeath = readList(r, () => readEffect(r))
-  return { uid, cardId, attack, health, maxHealth, exhausted, keywords, onDeath }
+  return { uid, cardId, attack, health, maxHealth, exhausted, ...(frozen ? { frozen: true } : {}), keywords, onDeath }
 }
 
 function writeWeapon(w: ByteWriter, weapon: Weapon | null): void {
@@ -458,6 +454,10 @@ function writeEvent(w: ByteWriter, event: ViewEvent): void {
       w.u8(event.player)
       w.varuint(event.uid)
       return
+    case 'frozen':
+      w.u8(event.player)
+      w.varuint(event.uid)
+      return
     case 'attacked':
       w.u8(event.player)
       w.varuint(event.attackerUid)
@@ -537,6 +537,8 @@ function readEvent(r: ByteReader): ViewEvent {
       return { type, player: readPlayer(r), uid: r.varuint() }
     case 'game_over':
       return { type, winner: readPlayer(r) }
+    case 'frozen':
+      return { type, player: readPlayer(r), uid: r.varuint() }
   }
 }
 
