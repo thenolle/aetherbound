@@ -18,6 +18,7 @@ export type MatchHeader = Readonly<{
   seed: number
   heroes: readonly [string, string]
   decks: readonly [readonly Id<'card'>[], readonly Id<'card'>[]]
+  accounts: readonly [string | null, string | null]
 }>
 
 export type MatchOutcome = Readonly<{ winner: PlayerIndex, endedAt: number }>
@@ -26,6 +27,15 @@ export type StoredMatch = Readonly<{
   header: MatchHeader
   outcome: MatchOutcome | null
   entries: readonly InputEntry[]
+}>
+
+export type MatchSummary = Readonly<{
+  id: string
+  createdAt: number
+  endedAt: number | null
+  seat: PlayerIndex
+  opponent: string
+  result: 'win' | 'loss' | 'unfinished'
 }>
 
 export type MatchRecorder = {
@@ -45,11 +55,28 @@ type MatchRow = {
   deck_1: string
   winner: number | null
   ended_at: number | null
+  account_0: string | null
+  account_1: string | null
 }
 
 type EntryRow = { idx: number, kind: string, actor: number | null, frame: Uint8Array | null }
 
-export function describeMatch(matchId: string, setup: MatchSetup, createdAt: number): MatchHeader {
+type SummaryRow = {
+  id: string
+  created_at: number
+  winner: number | null
+  ended_at: number | null
+  account_0: string | null
+  name_0: string | null
+  name_1: string | null
+}
+
+export function describeMatch(
+  matchId: string,
+  setup: MatchSetup,
+  createdAt: number,
+  accounts: readonly [string | null, string | null] = [null, null]
+): MatchHeader {
   return {
     id: matchId,
     createdAt,
@@ -57,7 +84,8 @@ export function describeMatch(matchId: string, setup: MatchSetup, createdAt: num
     contentSchemaVersion: VERSIONS.contentSchema,
     seed: setup.seed,
     heroes: [setup.players[0].hero.id, setup.players[1].hero.id],
-    decks: [[...setup.players[0].deck], [...setup.players[1].deck]]
+    decks: [[...setup.players[0].deck], [...setup.players[1].deck]],
+    accounts
   }
 }
 
@@ -82,17 +110,27 @@ export class SqliteMatchStore implements MatchRecorder {
   private readonly finishMatch: Prepared
   private readonly selectMatch: Prepared
   private readonly selectEntries: Prepared
+  private readonly selectSummaries: Prepared
 
   constructor(db: Database) {
     this.db = db
     this.insertMatch = db.prepare(
-      'INSERT INTO matches (id, created_at, rules_version, content_schema_version, seed, hero_0, hero_1, deck_0, deck_1) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)'
+      'INSERT INTO matches (id, created_at, rules_version, content_schema_version, seed, hero_0, hero_1, deck_0, deck_1, account_0, account_1) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)'
     )
     this.nextIndex = db.prepare('SELECT COALESCE(MAX(idx) + 1, 0) AS next FROM match_log WHERE match_id = ?1')
     this.insertEntry = db.prepare('INSERT INTO match_log (match_id, idx, kind, actor, frame) VALUES (?1, ?2, ?3, ?4, ?5)')
     this.finishMatch = db.prepare('UPDATE matches SET winner = ?1, ended_at = ?2 WHERE id = ?3 AND winner IS NULL')
     this.selectMatch = db.prepare('SELECT * FROM matches WHERE id = ?1')
     this.selectEntries = db.prepare('SELECT idx, kind, actor, frame FROM match_log WHERE match_id = ?1 ORDER BY idx')
+    this.selectSummaries = db.prepare(
+      `SELECT m.id, m.created_at, m.winner, m.ended_at, m.account_0, a0.display_name AS name_0, a1.display_name AS name_1
+       FROM matches m
+       LEFT JOIN accounts a0 ON a0.id = m.account_0
+       LEFT JOIN accounts a1 ON a1.id = m.account_1
+       WHERE m.account_0 = ?1 OR m.account_1 = ?1
+       ORDER BY m.created_at DESC
+       LIMIT ?2`
+    )
   }
 
   begin(header: MatchHeader): void {
@@ -105,7 +143,9 @@ export class SqliteMatchStore implements MatchRecorder {
       header.heroes[0],
       header.heroes[1],
       JSON.stringify(header.decks[0]),
-      JSON.stringify(header.decks[1])
+      JSON.stringify(header.decks[1]),
+      header.accounts[0],
+      header.accounts[1]
     )
   }
 
@@ -145,10 +185,20 @@ export class SqliteMatchStore implements MatchRecorder {
         contentSchemaVersion: row.content_schema_version,
         seed: row.seed,
         heroes: [row.hero_0, row.hero_1],
-        decks: [parseDeck(row.deck_0), parseDeck(row.deck_1)]
+        decks: [parseDeck(row.deck_0), parseDeck(row.deck_1)],
+        accounts: [row.account_0, row.account_1]
       },
       outcome: row.winner === null || row.ended_at === null ? null : { winner: toPlayer(row.winner), endedAt: row.ended_at },
       entries
     }
+  }
+
+  listForAccount(accountId: string, limit: number): MatchSummary[] {
+    return (this.selectSummaries.all(accountId, limit) as SummaryRow[]).map((row): MatchSummary => {
+      const seat: PlayerIndex = row.account_0 === accountId ? 0 : 1
+      const opponent = (seat === 0 ? row.name_1 : row.name_0) ?? 'Former player'
+      const result = row.winner === null ? 'unfinished' : row.winner === seat ? 'win' : 'loss'
+      return { id: row.id, createdAt: row.created_at, endedAt: row.ended_at, seat, opponent, result }
+    })
   }
 }

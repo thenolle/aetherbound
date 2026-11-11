@@ -25,6 +25,16 @@ function toRole(value: string): AccountRole {
 
 const toAccount = (row: AccountRow): Account => ({ id: row.id, displayName: row.display_name, role: toRole(row.role) })
 
+export type SessionInfo = Readonly<{
+  id: string
+  createdAt: number
+  expiresAt: number
+  userAgent: string | null
+  current: boolean
+}>
+
+type SessionRow = { token_hash: string, created_at: number, expires_at: number, user_agent: string | null }
+
 export class SqliteAccountStore {
   private readonly db: Database
   private readonly now: () => number
@@ -40,6 +50,9 @@ export class SqliteAccountStore {
   private readonly deleteFlow: Prepared
   private readonly sweepSessions: Prepared
   private readonly sweepFlows: Prepared
+  private readonly selectSessions: Prepared
+  private readonly deleteSessionById: Prepared
+  private readonly deleteAccountRow: Prepared
 
   constructor(db: Database, now: () => number) {
     this.db = db
@@ -48,9 +61,7 @@ export class SqliteAccountStore {
     this.insertAccount = db.prepare('INSERT INTO accounts (id, google_sub, display_name, created_at, last_login_at) VALUES (?1, ?2, ?3, ?4, ?4)')
     this.touchAccount = db.prepare('UPDATE accounts SET display_name = ?1, last_login_at = ?2 WHERE id = ?3')
     this.insertSession = db.prepare('INSERT INTO sessions (token_hash, account_id, created_at, expires_at, user_agent) VALUES (?1, ?2, ?3, ?4, ?5)')
-    this.selectSession = db.prepare(
-      'SELECT a.id, a.display_name, a.role FROM sessions s JOIN accounts a ON a.id = s.account_id WHERE s.token_hash = ?1 AND s.expires_at > ?2'
-    )
+    this.selectSession = db.prepare('SELECT a.id, a.display_name, a.role FROM sessions s JOIN accounts a ON a.id = s.account_id WHERE s.token_hash = ?1 AND s.expires_at > ?2')
     this.deleteSession = db.prepare('DELETE FROM sessions WHERE token_hash = ?1')
     this.deleteAccountSessions = db.prepare('DELETE FROM sessions WHERE account_id = ?1')
     this.insertFlow = db.prepare('INSERT INTO auth_flows (id_hash, state, nonce, code_verifier, expires_at) VALUES (?1, ?2, ?3, ?4, ?5)')
@@ -58,6 +69,9 @@ export class SqliteAccountStore {
     this.deleteFlow = db.prepare('DELETE FROM auth_flows WHERE id_hash = ?1')
     this.sweepSessions = db.prepare('DELETE FROM sessions WHERE expires_at <= ?1')
     this.sweepFlows = db.prepare('DELETE FROM auth_flows WHERE expires_at <= ?1')
+    this.selectSessions = db.prepare('SELECT token_hash, created_at, expires_at, user_agent FROM sessions WHERE account_id = ?1 AND expires_at > ?2 ORDER BY created_at DESC')
+    this.deleteSessionById = db.prepare('DELETE FROM sessions WHERE account_id = ?1 AND substr(token_hash, 1, 16) = ?2')
+    this.deleteAccountRow = db.prepare('DELETE FROM accounts WHERE id = ?1')
   }
 
   upsertGoogleAccount(sub: string, displayName: string): Account {
@@ -112,5 +126,24 @@ export class SqliteAccountStore {
   sweepExpired(): number {
     const now = this.now()
     return this.sweepSessions.run(now).changes + this.sweepFlows.run(now).changes
+  }
+
+  listSessions(accountId: string, currentToken: string | null): SessionInfo[] {
+    const currentHash = currentToken === null ? null : hashToken(currentToken)
+    return (this.selectSessions.all(accountId, this.now()) as SessionRow[]).map((row) => ({
+      id: row.token_hash.slice(0, 16),
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+      userAgent: row.user_agent,
+      current: row.token_hash === currentHash
+    }))
+  }
+
+  revokeSessionById(accountId: string, publicId: string): boolean {
+    return this.deleteSessionById.run(accountId, publicId).changes > 0
+  }
+
+  deleteAccount(accountId: string): void {
+    this.deleteAccountRow.run(accountId)
   }
 }

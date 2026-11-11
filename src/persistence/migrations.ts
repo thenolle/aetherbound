@@ -63,5 +63,15 @@ CREATE TABLE auth_flows (
 );
 CREATE INDEX auth_flows_expiry ON auth_flows (expires_at);
 `
+  },
+  {
+    version: 3,
+    name: 'link matches to accounts',
+    sql: `
+ALTER TABLE matches ADD COLUMN account_0 TEXT REFERENCES accounts (id) ON DELETE SET NULL;
+ALTER TABLE matches ADD COLUMN account_1 TEXT REFERENCES accounts (id) ON DELETE SET NULL;
+CREATE INDEX matches_account_0 ON matches (account_0, created_at);
+CREATE INDEX matches_account_1 ON matches (account_1, created_at);
+`
   }
 ]
