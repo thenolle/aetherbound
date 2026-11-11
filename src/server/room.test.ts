@@ -81,7 +81,7 @@ describe('Room', () => {
     expect(types(b.frames)).toEqual(['events', 'snapshot'])
 
     const seenByA = a.frames[1]
-    const seenByB = b.frames[1]
+    const seenByB = b.frames[0]
     if (seenByA?.type !== 'events' || seenByB?.type !== 'events') throw new Error('expected events')
     const drawA = seenByA.events.find((item) => item.event.type === 'card_drawn')
     const drawB = seenByB.events.find((item) => item.event.type === 'card_drawn')
