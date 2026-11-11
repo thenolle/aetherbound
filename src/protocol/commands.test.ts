@@ -23,7 +23,12 @@ const COMMANDS: readonly Command[] = [
   { type: 'activate', holdingUid: 8 },
   { type: 'activate', holdingUid: 8, targetUid: 12 },
   { type: 'end_turn' },
-  { type: 'surrender' }
+  { type: 'surrender' },
+  { type: 'place', handIndex: 3 },
+  { type: 'activate', holdingUid: 8 },
+  { type: 'activate', holdingUid: 8, targetUid: 12 },
+  { type: 'set', handIndex: 1 },
+  { type: 'swear', handIndex: 2 },
 ]
 
 const raw = (...bytes: number[]): Uint8Array => new Uint8Array(bytes)
@@ -41,7 +46,7 @@ const outcome = (data: Uint8Array): 'ok' | ProtocolErrorCode => {
 describe('command frames', () => {
   test('schema ids are unique and stable', () => {
     const ids = Object.values(COMMAND_SCHEMAS).map((schema) => schema.id)
-    expect(ids).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(ids).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
   })
 
   test('encode and decode match golden vectors', () => {
