@@ -12,7 +12,8 @@ describe('loadConfig', () => {
       databasePath: 'data/aetherbound.db',
       publicOrigin: 'http://localhost:8080',
       googleClientId: null,
-      googleClientSecret: null
+      googleClientSecret: null,
+      metricsToken: null,
     })
   })
 
@@ -20,11 +21,8 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ PUBLIC_ORIGIN: 'http://localhost:8080/app' })).toThrow(ConfigError)
     expect(() => loadConfig({ PUBLIC_ORIGIN: 'ftp://example.com' })).toThrow(ConfigError)
     expect(() => loadConfig({ GOOGLE_CLIENT_ID: 'only-an-id' })).toThrow(ConfigError)
-    expect(loadConfig({ PUBLIC_ORIGIN: 'https://play.example.com', GOOGLE_CLIENT_ID: 'id', GOOGLE_CLIENT_SECRET: 'secret' })).toMatchObject({
-      publicOrigin: 'https://play.example.com',
-      googleClientId: 'id',
-      googleClientSecret: 'secret'
-    })
+    expect(loadConfig({ PUBLIC_ORIGIN: 'https://play.example.com', GOOGLE_CLIENT_ID: 'id', GOOGLE_CLIENT_SECRET: 'secret' })).toMatchObject({ publicOrigin: 'https://play.example.com', googleClientId: 'id', googleClientSecret: 'secret' })
+    expect(() => loadConfig({ METRICS_TOKEN: 'short' })).toThrow(ConfigError)
   })
 
   test('reads valid values', () => {

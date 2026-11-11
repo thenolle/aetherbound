@@ -7,6 +7,7 @@ import type { EconomyServices } from './economy-api'
 import type { SqliteRatingStore } from '../persistence/rating-store'
 import type { IntegrityStore } from '../persistence/integrity-store'
 import type { SeasonStore } from '../persistence/season-store'
+import type { Metric } from './metrics'
 
 export type ApiServices = Readonly<{
   matchmaker: Matchmaker
@@ -15,6 +16,7 @@ export type ApiServices = Readonly<{
   ratings?: SqliteRatingStore
   seasons?: SeasonStore
   integrity?: IntegrityStore
+  metrics?: () => readonly Metric[]
 }>
 
 const REPLAY_PATH = /^\/api\/replay\/([0-9a-f-]{36})$/

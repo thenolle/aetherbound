@@ -19,6 +19,7 @@ import { makeRewardHook } from './rewards'
 import { RoomRegistry } from './rooms'
 import { IntegrityStore } from '../persistence/integrity-store'
 import { SeasonStore } from '../persistence/season-store'
+import type { Metric } from './metrics'
 
 try {
   const config = loadConfig(process.env)
@@ -45,8 +46,33 @@ try {
   const google = config.googleClientId !== null && config.googleClientSecret !== null ? new GoogleOidc({ clientId: config.googleClientId, clientSecret: config.googleClientSecret, redirectUri: `${config.publicOrigin}/auth/google/callback` }) : null
   if (google === null) log.warn('google sign-in is not configured: set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET')
   const auth = new Auth({ google, accounts, publicOrigin: config.publicOrigin, onAccountDeleted: (accountId) => matchmaker.leave(accountId) })
+  const databaseHealthy = (): boolean => {
+    try {
+      database.query('SELECT 1').get()
+      return true
+    } catch {
+      return false
+    }
+  }
+  const metrics = (): Metric[] => {
+    const stats = rooms.stats()
+    const queue = matchmaker.queueSizes()
+    const page = (database.query('PRAGMA page_count').get() as { page_count: number }).page_count
+    const size = (database.query('PRAGMA page_size').get() as { page_size: number }).page_size
+    return [
+      { name: 'aetherbound_rooms_open', help: 'Rooms held in memory.', type: 'gauge', value: stats.rooms },
+      { name: 'aetherbound_rooms_live', help: 'Rooms with a match in progress.', type: 'gauge', value: stats.live },
+      { name: 'aetherbound_connected_seats', help: 'Seats with a live connection.', type: 'gauge', value: stats.seats },
+      { name: 'aetherbound_matches_finished_total', help: 'Matches finished since start.', type: 'counter', value: stats.finished },
+      { name: 'aetherbound_queue_waiting', help: 'Players waiting in a queue.', type: 'gauge', value: queue.casual, labels: { mode: 'casual' } },
+      { name: 'aetherbound_queue_waiting', help: 'Players waiting in a queue.', type: 'gauge', value: queue.ranked, labels: { mode: 'ranked' } },
+      { name: 'aetherbound_database_bytes', help: 'Size of the database file.', type: 'gauge', value: page * size },
+      { name: 'aetherbound_process_resident_bytes', help: 'Resident memory of the process.', type: 'gauge', value: process.memoryUsage().rss },
+      { name: 'aetherbound_process_uptime_seconds', help: 'Seconds since the process started.', type: 'gauge', value: process.uptime() }
+    ]
+  }
   let ready = true
-  const server = createGameServer(config, () => ready, rooms, auth, { matchmaker, history, ratings, economy: { economy, decks, content: devContent, now: () => Date.now() }, seasons, integrity })
+  const server = createGameServer(config, () => ready && databaseHealthy(), rooms, auth, { matchmaker, history, ratings, economy: { economy, decks, content: devContent, now: () => Date.now() }, seasons, integrity, metrics })
   const sweeper = setInterval(() => {
     accounts.sweepExpired()
     matchmaker.sweep()

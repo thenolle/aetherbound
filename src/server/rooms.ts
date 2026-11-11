@@ -26,6 +26,7 @@ function pickSeat(owners: readonly [string | null, string | null], accountId: st
 }
 
 export class RoomRegistry {
+  private finishedCount = 0
   private readonly bindings = new Map<string, SeatBinding>()
   private readonly named = new Map<string, NamedRoom>()
   private readonly current = new Map<string, Assignment>()
@@ -97,6 +98,16 @@ export class RoomRegistry {
     this.current.clear()
   }
 
+  stats(): Readonly<{ rooms: number, live: number, seats: number, finished: number }> {
+    let live = 0
+    let seats = 0
+    for (const entry of this.all) {
+      if (entry.room.winner === null) live += 1
+      seats += entry.room.connectedSeats
+    }
+    return { rooms: this.all.size, live, seats, finished: this.finishedCount }
+  }
+
   private release(entry: OpenRoom): void {
     entry.room.dispose()
     this.bindings.delete(entry.tokens[0])
@@ -114,6 +125,7 @@ export class RoomRegistry {
   }
 
   private finish(result: { matchId: string, winner: PlayerIndex, inputs: number }, accounts: readonly [string | null, string | null], mode: MatchMode): void {
+    this.finishedCount += 1
     if (mode === 'ranked') try { this.rate(result.matchId, accounts, result.winner) } catch (error) { console.error('rating failed', error) }
     this.onFinished?.({ matchId: result.matchId, accounts, winner: result.winner, inputs: result.inputs, mode })
   }

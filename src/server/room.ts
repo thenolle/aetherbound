@@ -71,6 +71,10 @@ export class Room {
     return this.session.winner
   }
 
+  get connectedSeats(): number {
+    return this.links.filter((link) => link !== null).length
+  }
+
   attach(seat: PlayerIndex, link: SeatLink): void {
     if (this.failed) {
       link.close(1011, 'room unavailable')

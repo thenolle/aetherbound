@@ -10,7 +10,8 @@ import type { RoomRegistry } from './rooms'
 import { SCRIPT_HEADERS, SHELL_HEADERS, renderShell } from './shell'
 import { handleApi } from './api'
 import type { ApiServices } from './api'
-import { json, originAllowed } from './origin'
+import { json, isLoopback, originAllowed } from './origin'
+import { metricsAllowed, renderMetrics } from './metrics'
 
 export type SocketData = {
   seat: PlayerIndex
@@ -18,7 +19,6 @@ export type SocketData = {
   link: SeatLink | null
 }
 
-const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1'])
 const NAME_PATTERN = /^[a-z0-9-]{1,32}$/
 
 export function createGameServer(config: AppConfig, isReady: Readiness, rooms: RoomRegistry, auth: Auth, services: ApiServices) {
@@ -46,6 +46,12 @@ export function createGameServer(config: AppConfig, isReady: Readiness, rooms: R
         return json({ error: 'upgrade_failed' }, 400)
       }
       if (url.pathname.startsWith('/auth/')) return auth.handle(request)
+      if (url.pathname === '/metrics') {
+        const supplied = services.metrics
+        if (request.method !== 'GET' || supplied === undefined) return json({ error: 'not_found' }, 404)
+        if (!metricsAllowed(request.headers.get('authorization'), server.requestIP(request)?.address ?? '', config.metricsToken)) return json({ error: 'unauthorized' }, 401)
+        return new Response(renderMetrics(supplied()), { headers: { 'content-type': 'text/plain; version=0.0.4; charset=utf-8', 'cache-control': 'no-store' } })
+      }
       if (url.pathname.startsWith('/api/')) return handleApi(request, url, auth, services)
       if (readOnly && url.pathname === '/') return new Response(renderShell(), { headers: SHELL_HEADERS })
       if (readOnly && url.pathname === '/client.js') {
@@ -58,7 +64,7 @@ export function createGameServer(config: AppConfig, isReady: Readiness, rooms: R
       }
       if (request.method === 'POST' && url.pathname === '/dev/join') {
         const address = server.requestIP(request)?.address ?? ''
-        if (config.env === 'production' || !LOOPBACK.has(address)) return json({ error: 'not_found' }, 404)
+        if (config.env === 'production' || !isLoopback(address)) return json({ error: 'not_found' }, 404)
         if (!originAllowed(request, url)) return json({ error: 'forbidden_origin' }, 403)
         const account = auth.authenticate(request)
         if (account === null) return json({ error: 'unauthorized' }, 401)

@@ -43,6 +43,13 @@ export class Matchmaker {
     this.ratingOf = options.ratingOf ?? (() => DEFAULT_MMR)
   }
 
+  queueSizes(): Readonly<{ casual: number, ranked: number }> {
+    return {
+      casual: this.waiting.filter((entry) => entry.mode === 'casual').length,
+      ranked: this.waiting.filter((entry) => entry.mode === 'ranked').length
+    }
+  }
+
   status(accountId: string): QueueStatus {
     const current = this.rooms.currentFor(accountId)
     if (current !== null) return { status: 'matched', seat: current.seat, token: current.token }

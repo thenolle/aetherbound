@@ -11,6 +11,7 @@ export type AppConfig = Readonly<{
   publicOrigin: string
   googleClientId: string | null
   googleClientSecret: string | null
+  metricsToken: string | null
 }>
 
 export class ConfigError extends Error {
@@ -49,32 +50,20 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): A
   const issues: string[] = []
   const appEnv = pick(env.APP_ENV, APP_ENVS, 'development', 'APP_ENV', issues)
   const logLevel = pick(env.LOG_LEVEL, LOG_LEVELS, 'info', 'LOG_LEVEL', issues)
-
   const rawPort = env.PORT === undefined || env.PORT === '' ? '8080' : env.PORT
   const port = Number(rawPort)
-  if (!Number.isInteger(port) || port < 0 || port > 65535) {
-    issues.push(`PORT must be an integer between 0 and 65535 (got "${rawPort}")`)
-  }
-
+  if (!Number.isInteger(port) || port < 0 || port > 65535) issues.push(`PORT must be an integer between 0 and 65535 (got "${rawPort}")`)
   const region = env.REGION === undefined || env.REGION === '' ? 'local' : env.REGION
-  if (!REGION_PATTERN.test(region)) {
-    issues.push(`REGION must match ${REGION_PATTERN} (got "${region}")`)
-  }
-
+  if (!REGION_PATTERN.test(region)) issues.push(`REGION must match ${REGION_PATTERN} (got "${region}")`)
   const explicitOrigin = blank(env.PUBLIC_ORIGIN)
-  if (explicitOrigin !== null && !isOrigin(explicitOrigin)) {
-    issues.push(`PUBLIC_ORIGIN must be an http(s) origin without a path or trailing slash (got "${explicitOrigin}")`)
-  }
-
+  if (explicitOrigin !== null && !isOrigin(explicitOrigin)) issues.push(`PUBLIC_ORIGIN must be an http(s) origin without a path or trailing slash (got "${explicitOrigin}")`)
   const googleClientId = blank(env.GOOGLE_CLIENT_ID)
   const googleClientSecret = blank(env.GOOGLE_CLIENT_SECRET)
-  if ((googleClientId === null) !== (googleClientSecret === null)) {
-    issues.push('GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together')
-  }
-
+  if ((googleClientId === null) !== (googleClientSecret === null)) issues.push('GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together')
+  const metricsToken = blank(env.METRICS_TOKEN)
+  if (metricsToken !== null && metricsToken.length < 16) issues.push('METRICS_TOKEN must be at least 16 characters')
   const host = env.HOST === undefined || env.HOST === '' ? '0.0.0.0' : env.HOST
   const databasePath = env.DATABASE_PATH === undefined || env.DATABASE_PATH === '' ? 'data/aetherbound.db' : env.DATABASE_PATH
-
   if (issues.length > 0) throw new ConfigError(issues)
   return {
     env: appEnv,
@@ -85,6 +74,7 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): A
     databasePath,
     publicOrigin: explicitOrigin ?? `http://localhost:${port}`,
     googleClientId,
-    googleClientSecret
+    googleClientSecret,
+    metricsToken,
   }
 }
