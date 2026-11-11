@@ -5,6 +5,7 @@ export const ERROR_CODES = [
   'illegal_target',
   'board_full',
   'deck_invalid',
+  'invalid_content',
   'unauthorized',
   'rate_limited',
   'internal'

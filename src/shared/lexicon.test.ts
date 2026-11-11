@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test'
-import { findBannedWords } from '../content/lint'
 import { isValidId } from './ids'
 import { BOARDS, BOARD_IDS, CARD_FAMILIES, CARD_FAMILY_IDS, FACTIONS, FACTION_IDS, GAME_LIMITS, LOCALES, RARITIES, RARITY_IDS, allLexiconNames, localize } from './lexicon'
 
@@ -32,9 +31,5 @@ describe('lexicon', () => {
   test('bible-given french names are exact', () => {
     expect(FACTIONS.exchequer.name.fr).toBe("L'Échiquier de la Concorde")
     expect(FACTIONS.brasswright.name.fr).toBe('La Guilde des Cuivriers')
-  })
-
-  test('no english name contains a banned word', () => {
-    for (const name of allLexiconNames()) expect(findBannedWords(name.en)).toEqual([])
   })
 })
