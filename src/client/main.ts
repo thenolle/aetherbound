@@ -15,12 +15,13 @@ import { MenuController } from './menu'
 import type { Api } from './menu'
 import { GameSocket } from './net'
 import { BRINE_LOCK_CARDS, BRINE_LOCK_HERO } from '../content/brine-lock'
+import { BRIARTHORN_CARDS, BRIARTHORN_HERO } from '../content/briarthorn'
 import { EXCHEQUER_CARDS, EXCHEQUER_HERO } from '../content/exchequer'
 import { DeckBuilder } from './decks'
 import { A11yBridge } from './a11y'
 import { CollectionScreen } from './collection'
 
-const registry = createRegistry([...EXCHEQUER_CARDS, ...BRINE_LOCK_CARDS])
+const registry = createRegistry([...EXCHEQUER_CARDS, ...BRINE_LOCK_CARDS, ...BRIARTHORN_CARDS])
 const NOTE_LIMIT = 8
 const POLL_MS = 1500
 const HANDLED_KEYS = new Set(['ArrowLeft', 'ArrowRight'])
@@ -294,7 +295,7 @@ async function start(): Promise<void> {
     const deckBuilder = new DeckBuilder({
       api,
       registry,
-      heroes: [EXCHEQUER_HERO, BRINE_LOCK_HERO],
+      heroes: [EXCHEQUER_HERO, BRINE_LOCK_HERO, BRIARTHORN_HERO],
       onChange: render,
       onBack: toMenu
     })

@@ -3,14 +3,16 @@ import { EXCHEQUER_CARDS, EXCHEQUER_DECK, EXCHEQUER_HERO } from '../content/exch
 import type { ContentLookup } from '../persistence/restore'
 import type { MatchSetup } from '../rules/engine'
 import { createRegistry } from '../shared/cards'
+import { BRIARTHORN_CARDS, BRIARTHORN_HERO } from '../content/briarthorn'
 
-const registry = createRegistry([...EXCHEQUER_CARDS, ...BRINE_LOCK_CARDS])
+const registry = createRegistry([...EXCHEQUER_CARDS, ...BRINE_LOCK_CARDS, ...BRIARTHORN_CARDS])
 
 export const devContent: ContentLookup = {
   registry,
   heroes: new Map([
     [EXCHEQUER_HERO.id, EXCHEQUER_HERO],
-    [BRINE_LOCK_HERO.id, BRINE_LOCK_HERO]
+    [BRINE_LOCK_HERO.id, BRINE_LOCK_HERO],
+    [BRIARTHORN_HERO.id, BRIARTHORN_HERO]
   ])
 }
 
