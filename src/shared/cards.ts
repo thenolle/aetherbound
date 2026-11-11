@@ -66,6 +66,8 @@ function checkEffects(effects: readonly Effect[], fail: Fail): void {
     } else if (effect.kind === 'buff') {
       const valid = Number.isInteger(effect.attack) && Number.isInteger(effect.health) && effect.attack >= 0 && effect.health >= 0 && effect.attack <= 9 && effect.health <= 9
       if (!valid || effect.attack + effect.health === 0) fail('buff needs integer bonuses from 0 to 9, not both zero')
+    } else if (effect.kind === 'steal') {
+      if (!Number.isInteger(effect.count) || effect.count < 1 || effect.count > 5) fail('steal count must be 1 to 5')
     } else if ('amount' in effect && (!Number.isInteger(effect.amount) || effect.amount < 1 || effect.amount > 99)) {
       fail('effect amount must be 1 to 99')
     }

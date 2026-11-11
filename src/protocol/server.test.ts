@@ -48,6 +48,8 @@ const ALL_EVENTS: readonly ViewEvent[] = [
   { type: 'grew', player: 0, uid: 12, attack: 4, health: 6 },
   { type: 'buffed', player: 0, uid: 4, attack: 3, health: 3 },
   { type: 'forged', player: 1, attack: 4, durability: 2 },
+  { type: 'card_stolen', player: 0, cardId: cid(11) },
+  { type: 'card_stolen', player: 1, cardId: null },
 ]
 
 const eventsMessage: ServerMessage = {
@@ -86,6 +88,8 @@ function richState() {
       { kind: 'forge', attack: 1, durability: 1 },
       { kind: 'buff', attack: 1, health: 2 },
       { kind: 'heal', amount: 2, target: 'all-own-minions' },
+      { kind: 'steal', count: 2, take: true },
+      { kind: 'counterfeit' },
     ]
   }]
   state.players[1].board = [{ uid: 2, cardId: cid(3), attack: 3, health: 3, maxHealth: 3, exhausted: false, keywords: [], onDeath: [] }]

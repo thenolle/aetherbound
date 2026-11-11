@@ -129,3 +129,4 @@ export type GameEvent =
   | { type: 'surged', player: PlayerIndex, amount: number }
   | { type: 'buffed', player: PlayerIndex, uid: number, attack: number, health: number }
   | { type: 'forged', player: PlayerIndex, attack: number, durability: number }
+  | { type: 'card_stolen', player: PlayerIndex, cardId: Id<'card'> }

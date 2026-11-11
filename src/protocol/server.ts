@@ -63,6 +63,7 @@ export const EVENT_IDS = {
   surged: 31,
   buffed: 32,
   forged: 33,
+  card_stolen: 34,
 } as const satisfies Record<ViewEvent['type'], number>
 
 const MESSAGE_TYPE_BY_ID = new Map<number, ServerMessage['type']>((Object.keys(MESSAGE_IDS) as ServerMessage['type'][]).map((type) => [MESSAGE_IDS[type], type]))
@@ -225,6 +226,14 @@ function writeEffect(w: ByteWriter, effect: Effect): void {
       w.varuint(effect.attack)
       w.varuint(effect.health)
       return
+    case 'steal':
+      w.u8(13)
+      w.varuint(effect.count)
+      writeBool(w, effect.take)
+      return
+    case 'counterfeit':
+      w.u8(14)
+      return
   }
 }
 
@@ -256,6 +265,8 @@ function readEffect(r: ByteReader): Effect {
   if (kind === 10) return { kind: 'rupture', count: r.varuint() }
   if (kind === 11) return { kind: 'forge', attack: r.varuint(), durability: r.varuint() }
   if (kind === 12) return { kind: 'buff', attack: r.varuint(), health: r.varuint() }
+  if (kind === 13) return { kind: 'steal', count: r.varuint(), take: readBool(r) }
+  if (kind === 14) return { kind: 'counterfeit' }
   throw malformed('invalid effect kind')
 }
 
@@ -602,6 +613,10 @@ function writeEvent(w: ByteWriter, event: ViewEvent): void {
       w.varuint(event.attack)
       w.varuint(event.durability)
       return
+    case 'card_stolen':
+      w.u8(event.player)
+      writeOptCard(w, event.cardId)
+      return
   }
 }
 
@@ -642,6 +657,7 @@ function readEvent(r: ByteReader): ViewEvent {
     case 'surged': return { type, player: readPlayer(r), amount: r.varuint() }
     case 'buffed': return { type, player: readPlayer(r), uid: r.varuint(), attack: r.varuint(), health: r.varuint() }
     case 'forged': return { type, player: readPlayer(r), attack: r.varuint(), durability: r.varuint() }
+    case 'card_stolen': return { type, player: readPlayer(r), cardId: readOptCard(r) }
   }
 }
 

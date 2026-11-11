@@ -209,6 +209,41 @@ function applyEffect(state: MatchState, caster: PlayerIndex, effect: Effect, cho
     }
     return
   }
+  if (effect.kind === 'steal') {
+    const mine = state.players[caster]
+    const theirs = state.players[foe]
+    for (let count = 0; count < effect.count; count += 1) {
+      const cardId = theirs.deck[effect.take ? 0 : count]
+      if (cardId === undefined) break
+      if (effect.take) theirs.deck.shift()
+      if (mine.hand.length >= RULES.handLimit) {
+        if (effect.take) continue
+        break
+      }
+      mine.hand.push(cardId)
+      events.push({ type: 'card_stolen', player: caster, cardId })
+    }
+    return
+  }
+  if (effect.kind === 'counterfeit') {
+    const side = state.players[caster]
+    if (chosen === undefined || chosen.health <= 0 || side.board.length >= GAME_LIMITS.boardSlots) return
+    const copy: Minion = {
+      uid: state.nextUid,
+      cardId: chosen.cardId,
+      attack: chosen.attack,
+      health: chosen.health,
+      maxHealth: chosen.maxHealth,
+      exhausted: true,
+      keywords: [...chosen.keywords],
+      onDeath: structuredClone(chosen.onDeath),
+      ...(chosen.grows === undefined ? {} : { grows: { ...chosen.grows } })
+    }
+    state.nextUid += 1
+    side.board.push(copy)
+    events.push({ type: 'minion_summoned', player: caster, uid: copy.uid, cardId: copy.cardId })
+    return
+  }
   if (effect.kind !== 'damage' && effect.kind !== 'heal') return
   const amount = effect.amount
   const harmful = effect.kind === 'damage'

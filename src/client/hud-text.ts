@@ -65,6 +65,7 @@ export function describeEvent(event: ViewEvent, registry: CardRegistry): string 
     case 'game_over': return `${who(event.winner)} wins`
     case 'buffed': return `#${event.uid} is reinforced to ${event.attack}/${event.health}`
     case 'forged': return `${who(event.player)} forges the iron to ${event.attack}/${event.durability}`
+    case 'card_stolen': return `${who(event.player)} steals ${card(event.cardId)}`
   }
 }
 

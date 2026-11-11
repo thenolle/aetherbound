@@ -21,9 +21,10 @@ export type MatchView = {
 }
 
 export type ViewEvent =
-  | Exclude<GameEvent, { type: 'card_drawn' } | { type: 'snare_set' }>
+  | Exclude<GameEvent, { type: 'card_drawn' } | { type: 'snare_set' } | { type: 'card_stolen' }>
   | { type: 'card_drawn', player: PlayerIndex, cardId: Id<'card'> | null }
   | { type: 'snare_set', player: PlayerIndex, uid: number, cardId: Id<'card'> | null }
+  | { type: 'card_stolen', player: PlayerIndex, cardId: Id<'card'> | null }
 
 export function projectState(state: MatchState, viewer: PlayerIndex): MatchView {
   const { deck: ownDeck, ...own } = state.players[viewer]
@@ -42,5 +43,6 @@ export function projectState(state: MatchState, viewer: PlayerIndex): MatchView 
 export function projectEvent(event: GameEvent, viewer: PlayerIndex): ViewEvent {
   if (event.type === 'card_drawn' && event.player !== viewer) return { ...event, cardId: null }
   if (event.type === 'snare_set' && event.player !== viewer) return { ...event, cardId: null }
+  if (event.type === 'card_stolen' && event.player !== viewer) return { ...event, cardId: null }
   return event
 }
