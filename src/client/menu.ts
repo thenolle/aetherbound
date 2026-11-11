@@ -4,11 +4,12 @@ import { fieldOf, numberOf, textOf } from './json'
 
 export interface Api {
   get(path: string): Promise<unknown>
-  post(path: string): Promise<unknown>
+  post(path: string, body?: unknown): Promise<unknown>
 }
 
 export type MenuActions = Readonly<{
   play: (mode: 'casual' | 'ranked') => void
+  openDecks: () => void
   signOut: () => void
 }>
 
@@ -77,6 +78,7 @@ export class MenuController {
       button('play-ranked', 'Play ranked', () => this.actions.play('ranked'), idle),
       button('daily', 'Claim daily pack', () => void this.claimDaily(), idle),
       button('open', 'Open a pack', () => void this.openPack(), idle && this.packs > 0),
+      button('decks', 'Build decks', () => this.actions.openDecks(), idle),
       button('sign-out', 'Sign out', () => this.actions.signOut(), idle),
       spacer(),
       ...this.lines.map((line) => label(line)),

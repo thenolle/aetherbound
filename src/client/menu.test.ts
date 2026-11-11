@@ -18,7 +18,7 @@ function fake(responses: Record<string, unknown>) {
   return { api, calls }
 }
 
-const noActions: MenuActions = { play: () => undefined, signOut: () => undefined }
+const noActions: MenuActions = { play: () => undefined, signOut: () => undefined, openDecks: () => undefined }
 
 describe('MenuController', () => {
   test('loads the balances and only offers to open a pack when one is available', async () => {
@@ -85,7 +85,7 @@ describe('MenuController', () => {
       get: () => new Promise((resolve) => { release = () => resolve({ packs: 0, dust: 0 }) }),
       post: async () => null
     }
-    const actions: MenuActions = { play: (mode) => played.push(mode), signOut: () => played.push('out') }
+    const actions: MenuActions = { play: (mode) => played.push(mode), signOut: () => played.push('out'), openDecks: () => undefined }
     const menu = new MenuController(api, 'M', actions, () => undefined)
     findButton(menu.build(), 'play-ranked')?.onPress()
     findButton(menu.build(), 'sign-out')?.onPress()

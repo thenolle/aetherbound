@@ -1,5 +1,3 @@
-import { BRINE_LOCK_CARDS } from '../content/brine-lock'
-import { EXCHEQUER_CARDS } from '../content/exchequer'
 import type { ReplayStep } from '../persistence/restore'
 import type { MatchView } from '../rules/projection'
 import { createRegistry } from '../shared/cards'
@@ -16,21 +14,25 @@ import { fieldOf, textOf } from './json'
 import { MenuController } from './menu'
 import type { Api } from './menu'
 import { GameSocket } from './net'
+import { BRINE_LOCK_CARDS, BRINE_LOCK_HERO } from '../content/brine-lock'
+import { EXCHEQUER_CARDS, EXCHEQUER_HERO } from '../content/exchequer'
+import { DeckBuilder } from './decks'
 
 const registry = createRegistry([...EXCHEQUER_CARDS, ...BRINE_LOCK_CARDS])
 const NOTE_LIMIT = 8
 const POLL_MS = 1500
 const HANDLED_KEYS = new Set(['ArrowLeft', 'ArrowRight'])
 
-type Screen = 'signin' | 'menu' | 'game' | 'replay'
+type Screen = 'signin' | 'menu' | 'decks' | 'game' | 'replay'
 
 async function readJson(response: Response): Promise<unknown> {
   try { return await response.json() } catch { return null }
 }
 
-async function postJson(path: string): Promise<unknown> {
-  const response = await fetch(path, { method: 'POST' })
-  return response.ok ? readJson(response) : null
+async function postJson(path: string, body?: unknown): Promise<unknown> {
+  const response = await fetch(path, { method: 'POST', ...(body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }) })
+  if (!response.ok) return null
+  return response.status === 204 ? {} : readJson(response)
 }
 
 const api: Api = {
@@ -55,6 +57,10 @@ async function start(): Promise<void> {
   const host = new UiHost()
   let screen: Screen = 'signin'
   let menu: MenuController | null = null
+  let builder: DeckBuilder | null = null
+  const getMenu = (): MenuController | null => menu
+  const getBuilder = (): DeckBuilder | null => builder
+  const onUiScreen = (): boolean => screen === 'signin' || screen === 'menu' || screen === 'decks'
   let view: MatchView | null = null
   let selection: Selection = INITIAL_SELECTION
   let status = 'checking your session'
@@ -78,10 +84,12 @@ async function start(): Promise<void> {
     ...notes.map((line) => label(line, { tone: 'warn' }))
   ], { padding: 28, gap: 12 })
   const render = (): void => {
-    if (screen === 'signin' || screen === 'menu') {
+    if (onUiScreen()) {
       const { width, height } = presenter.frame()
-      const tree = screen === 'menu' && menu !== null ? menu.build() : signInTree()
-      host.setTree(centered(tree), { x: 0, y: 0, width, height })
+      let tree: UiNode = signInTree()
+      if (screen === 'menu' && getMenu() !== null) tree = getMenu()!.build()
+      if (screen === 'decks' && getBuilder() !== null) tree = getBuilder()!.build()
+      host.setTree(screen === 'decks' ? tree : centered(tree), { x: 0, y: 0, width, height })
       host.draw(painter, DEFAULT_THEME)
       presenter.present()
       return
@@ -173,13 +181,23 @@ async function start(): Promise<void> {
   }
   window.addEventListener('resize', render)
   canvas.addEventListener('pointerdown', (event) => {
-    if ((screen === 'signin' || screen === 'menu') && host.pointer(event.clientX, event.clientY, 'down')) render()
+    if (onUiScreen() && host.pointer(event.clientX, event.clientY, 'down')) render()
   })
   canvas.addEventListener('pointermove', (event) => {
-    if ((screen === 'signin' || screen === 'menu') && host.pointer(event.clientX, event.clientY, 'move')) render()
+    if (onUiScreen() && host.pointer(event.clientX, event.clientY, 'move')) render()
   })
+  canvas.addEventListener('wheel', (event) => {
+    if (onUiScreen() && host.wheel(event.clientX, event.clientY, event.deltaY)) {
+      event.preventDefault()
+      render()
+    }
+  }, { passive: false })
   window.addEventListener('keydown', (event) => {
-    if (screen === 'signin' || screen === 'menu') {
+    if (onUiScreen()) {
+      if (screen === 'decks' && event.key === 'Escape') {
+        getBuilder()?.back()
+        return
+      }
       if (host.key(event.key)) {
         event.preventDefault()
         render()
@@ -250,7 +268,24 @@ async function start(): Promise<void> {
     render()
     return
   }
-  menu = new MenuController(api, playerName, { play: (mode) => void beginQueue(mode, playerName), signOut: () => void signOut() }, render)
+  const openDecks = async (): Promise<void> => {
+    const deckBuilder = new DeckBuilder({
+      api,
+      registry,
+      heroes: [EXCHEQUER_HERO, BRINE_LOCK_HERO],
+      onChange: render,
+      onBack: () => {
+        screen = 'menu'
+        render()
+        void getMenu()?.refresh()
+      }
+    })
+    builder = deckBuilder
+    screen = 'decks'
+    render()
+    await deckBuilder.load()
+  }
+  menu = new MenuController(api, playerName, { play: (mode) => void beginQueue(mode, playerName), openDecks: () => void openDecks(), signOut: () => void signOut() }, render)
   screen = 'menu'
   render()
   await menu.refresh()
