@@ -8,6 +8,9 @@ import type { Readiness } from './http'
 import type { Room, SeatLink } from './room'
 import type { RoomRegistry } from './rooms'
 import { SCRIPT_HEADERS, SHELL_HEADERS, renderShell } from './shell'
+import { handleApi } from './api'
+import type { ApiServices } from './api'
+import { json, originAllowed } from './origin'
 
 export type SocketData = {
   seat: PlayerIndex
@@ -17,21 +20,8 @@ export type SocketData = {
 
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1'])
 const NAME_PATTERN = /^[a-z0-9-]{1,32}$/
-const NO_STORE = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } as const
 
-const json = (body: unknown, status: number): Response => Response.json(body, { status, headers: NO_STORE })
-
-function originAllowed(request: Request, url: URL): boolean {
-  const origin = request.headers.get('origin')
-  if (origin === null) return true
-  try {
-    return new URL(origin).host === url.host
-  } catch {
-    return false
-  }
-}
-
-export function createGameServer(config: AppConfig, isReady: Readiness, rooms: RoomRegistry, auth: Auth) {
+export function createGameServer(config: AppConfig, isReady: Readiness, rooms: RoomRegistry, auth: Auth, services: ApiServices) {
   let bundle: Promise<string> | null = null
   const clientBundle = (): Promise<string> => {
     bundle ??= buildClientBundle().catch((error: unknown) => {
@@ -40,30 +30,24 @@ export function createGameServer(config: AppConfig, isReady: Readiness, rooms: R
     })
     return bundle
   }
-
   return Bun.serve({
     hostname: config.host,
     port: config.port,
     async fetch(request, server) {
       const url = new URL(request.url)
       const readOnly = request.method === 'GET' || request.method === 'HEAD'
-
       if (url.pathname === '/ws') {
         if (!originAllowed(request, url)) return json({ error: 'forbidden_origin' }, 403)
         const binding = rooms.lookup(url.searchParams.get('token') ?? '')
         const account = auth.authenticate(request)
-        if (binding === null || binding.accountId === null || account === null || account.id !== binding.accountId) {
-          return json({ error: 'unauthorized' }, 401)
-        }
+        if (binding === null || binding.accountId === null || account === null || account.id !== binding.accountId) return json({ error: 'unauthorized' }, 401)
         const data: SocketData = { seat: binding.seat, room: binding.room, link: null }
         if (server.upgrade(request, { data })) return undefined
         return json({ error: 'upgrade_failed' }, 400)
       }
-
       if (url.pathname.startsWith('/auth/')) return auth.handle(request)
-
+      if (url.pathname.startsWith('/api/')) return handleApi(request, url, auth, services)
       if (readOnly && url.pathname === '/') return new Response(renderShell(), { headers: SHELL_HEADERS })
-
       if (readOnly && url.pathname === '/client.js') {
         try {
           return new Response(await clientBundle(), { headers: SCRIPT_HEADERS })
@@ -72,7 +56,6 @@ export function createGameServer(config: AppConfig, isReady: Readiness, rooms: R
           return json({ error: 'client_build_failed' }, 500)
         }
       }
-
       if (request.method === 'POST' && url.pathname === '/dev/join') {
         const address = server.requestIP(request)?.address ?? ''
         if (config.env === 'production' || !LOOPBACK.has(address)) return json({ error: 'not_found' }, 404)
@@ -85,7 +68,6 @@ export function createGameServer(config: AppConfig, isReady: Readiness, rooms: R
         if (joined === null) return json({ error: 'room_full' }, 409)
         return json({ seat: joined.seat, token: joined.token }, 200)
       }
-
       return handleRequest(request, config, isReady)
     },
     websocket: {

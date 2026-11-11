@@ -24,7 +24,11 @@ export type RoomOptions = Readonly<{
   schedule: (run: () => void, ms: number) => () => void
 }>
 
-export type RoomPersistence = Readonly<{ matchId: string, recorder: MatchRecorder }>
+export type RoomPersistence = Readonly<{
+  matchId: string
+  recorder: MatchRecorder
+  accounts?: readonly [string | null, string | null]
+}>
 
 export const DEFAULT_ROOM_OPTIONS: RoomOptions = {
   turnMs: RULES.turnSeconds * 1000,
@@ -57,9 +61,7 @@ export class Room {
     this.options = options
     this.persistence = persistence
     this.buckets = [this.newBucket(), this.newBucket()]
-    if (persistence !== null) {
-      persistence.recorder.begin(describeMatch(persistence.matchId, setup, options.now()))
-    }
+    if (persistence !== null) persistence.recorder.begin(describeMatch(persistence.matchId, setup, options.now(), persistence.accounts))
   }
 
   get winner(): PlayerIndex | null {

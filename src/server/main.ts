@@ -1,42 +1,39 @@
 import { GoogleOidc } from '../auth/google'
 import { SqliteAccountStore } from '../persistence/account-store'
 import { migrate, openDatabase } from '../persistence/database'
+import { HistoryService } from '../persistence/history'
 import { SqliteMatchStore } from '../persistence/match-store'
 import { MIGRATIONS } from '../persistence/migrations'
 import { ConfigError, loadConfig } from '../shared/config'
 import { createLogger } from '../shared/log'
 import { Auth } from './auth'
+import { devContent, devMatchSetup } from './dev-match'
 import { createGameServer } from './gateway'
+import { Matchmaker } from './matchmaker'
 import { RoomRegistry } from './rooms'
 
 try {
   const config = loadConfig(process.env)
   const log = createLogger(config.logLevel, { region: config.region })
-  if (config.env === 'production' && !config.publicOrigin.startsWith('https://')) {
-    throw new ConfigError(['PUBLIC_ORIGIN must be https in production'])
-  }
-
+  if (config.env === 'production' && !config.publicOrigin.startsWith('https://')) throw new ConfigError(['PUBLIC_ORIGIN must be https in production'])
   const database = openDatabase(config.databasePath)
   migrate(database, MIGRATIONS)
   const accounts = new SqliteAccountStore(database, () => Date.now())
-  const google =
-    config.googleClientId !== null && config.googleClientSecret !== null
-      ? new GoogleOidc({
-          clientId: config.googleClientId,
-          clientSecret: config.googleClientSecret,
-          redirectUri: `${config.publicOrigin}/auth/google/callback`
-        })
-      : null
+  const matchStore = new SqliteMatchStore(database)
+  const rooms = new RoomRegistry(matchStore)
+  const matchmaker = new Matchmaker(rooms, devMatchSetup, () => Date.now())
+  const history = new HistoryService(matchStore, devContent)
+  const google = config.googleClientId !== null && config.googleClientSecret !== null ? new GoogleOidc({ clientId: config.googleClientId, clientSecret: config.googleClientSecret, redirectUri: `${config.publicOrigin}/auth/google/callback` }) : null
   if (google === null) log.warn('google sign-in is not configured: set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET')
-
-  const auth = new Auth({ google, accounts, publicOrigin: config.publicOrigin })
-  const rooms = new RoomRegistry(new SqliteMatchStore(database))
+  const auth = new Auth({ google, accounts, publicOrigin: config.publicOrigin, onAccountDeleted: (accountId) => matchmaker.leave(accountId) })
   let ready = true
-  const server = createGameServer(config, () => ready, rooms, auth)
-  const sweeper = setInterval(() => accounts.sweepExpired(), 3_600_000)
+  const server = createGameServer(config, () => ready, rooms, auth, { matchmaker, history })
+  const sweeper = setInterval(() => {
+    accounts.sweepExpired()
+    matchmaker.sweep()
+  }, 60_000)
   sweeper.unref()
   log.info('server started', { url: server.url.toString(), env: config.env, database: config.databasePath, origin: config.publicOrigin })
-
   const shutdown = async (signal: string): Promise<void> => {
     log.info('shutdown requested', { signal })
     ready = false

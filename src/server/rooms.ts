@@ -12,6 +12,8 @@ export type JoinResult = Readonly<{ seat: PlayerIndex, token: string }>
 
 type NamedRoom = { open: OpenRoom, owners: [string | null, string | null] }
 
+type Assignment = Readonly<{ room: Room, result: JoinResult }>
+
 function randomToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32))
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
@@ -28,6 +30,7 @@ function pickSeat(owners: readonly [string | null, string | null], accountId: st
 export class RoomRegistry {
   private readonly bindings = new Map<string, SeatBinding>()
   private readonly named = new Map<string, NamedRoom>()
+  private readonly current = new Map<string, Assignment>()
   private readonly all = new Set<OpenRoom>()
   private readonly recorder: MatchRecorder | null
 
@@ -35,14 +38,35 @@ export class RoomRegistry {
     this.recorder = recorder
   }
 
-  open(setup: MatchSetup, options: RoomOptions = DEFAULT_ROOM_OPTIONS): OpenRoom {
-    const persistence = this.recorder === null ? null : { matchId: crypto.randomUUID(), recorder: this.recorder }
+  open(
+    setup: MatchSetup,
+    options: RoomOptions = DEFAULT_ROOM_OPTIONS,
+    accounts: readonly [string | null, string | null] = [null, null]
+  ): OpenRoom {
+    const persistence = this.recorder === null ? null : { matchId: crypto.randomUUID(), recorder: this.recorder, accounts }
     const room = new Room(setup, options, persistence)
     const entry: OpenRoom = { room, tokens: [randomToken(), randomToken()] }
-    this.bindings.set(entry.tokens[0], { room, seat: 0, accountId: null })
-    this.bindings.set(entry.tokens[1], { room, seat: 1, accountId: null })
+    this.bindings.set(entry.tokens[0], { room, seat: 0, accountId: accounts[0] })
+    this.bindings.set(entry.tokens[1], { room, seat: 1, accountId: accounts[1] })
     this.all.add(entry)
     return entry
+  }
+
+  openMatch(accounts: readonly [string, string], makeSetup: () => MatchSetup, options: RoomOptions = DEFAULT_ROOM_OPTIONS): void {
+    const entry = this.open(makeSetup(), options, accounts)
+    for (const seat of [0, 1] as const) {
+      this.current.set(accounts[seat], { room: entry.room, result: { seat, token: entry.tokens[seat] } })
+    }
+  }
+
+  currentFor(accountId: string): JoinResult | null {
+    const found = this.current.get(accountId)
+    if (found === undefined) return null
+    if (found.room.winner !== null) {
+      this.current.delete(accountId)
+      return null
+    }
+    return found.result
   }
 
   lookup(token: string): Readonly<SeatBinding> | null {
@@ -68,6 +92,7 @@ export class RoomRegistry {
   closeAll(): void {
     for (const entry of [...this.all]) this.release(entry)
     this.named.clear()
+    this.current.clear()
   }
 
   private release(entry: OpenRoom): void {
@@ -75,5 +100,8 @@ export class RoomRegistry {
     this.bindings.delete(entry.tokens[0])
     this.bindings.delete(entry.tokens[1])
     this.all.delete(entry)
+    for (const [accountId, assignment] of this.current) {
+      if (assignment.room === entry.room) this.current.delete(accountId)
+    }
   }
 }

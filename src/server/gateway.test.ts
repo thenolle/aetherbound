@@ -9,6 +9,8 @@ import { loadConfig } from '../shared/config'
 import { Auth } from './auth'
 import { createGameServer } from './gateway'
 import { RoomRegistry } from './rooms'
+import { devMatchSetup } from './dev-match'
+import { Matchmaker } from './matchmaker'
 
 class Inbox {
   private readonly queue: ServerMessage[] = []
@@ -25,7 +27,7 @@ class Inbox {
 
   async next<T extends ServerMessage['type']>(type: T): Promise<Extract<ServerMessage, { type: T }>> {
     const deadline = Date.now() + 3000
-    for (;;) {
+    for (; ;) {
       const index = this.queue.findIndex((message) => message.type === type)
       if (index >= 0) return this.queue.splice(index, 1)[0] as Extract<ServerMessage, { type: T }>
       const remaining = deadline - Date.now()
@@ -70,7 +72,8 @@ function signIn(sub: string): string {
 
 describe('game server', () => {
   const rooms = new RoomRegistry()
-  const server = createGameServer(loadConfig({ APP_ENV: 'test', PORT: '0', HOST: '127.0.0.1' }), () => true, rooms, auth)
+  const services = { matchmaker: new Matchmaker(rooms, devMatchSetup, () => Date.now()), history: null }
+  const server = createGameServer(loadConfig({ APP_ENV: 'test', PORT: '0', HOST: '127.0.0.1' }), () => true, rooms, auth, services)
   const url = (path: string): URL => new URL(path, server.url)
   const join = (room: string, cookie?: string): Promise<Response> =>
     fetch(url(`/dev/join?room=${room}`), { method: 'POST', headers: cookie === undefined ? {} : { cookie } })
@@ -121,12 +124,7 @@ describe('game server', () => {
     expect(await (await fetch(url('/auth/me'), { headers: { cookie: alice } })).json()).toMatchObject({ displayName: 'Player alice' })
     expect((await fetch(url('/auth/google/start'))).status).toBe(503)
 
-    const production = createGameServer(
-      loadConfig({ APP_ENV: 'production', PORT: '0', HOST: '127.0.0.1' }),
-      () => true,
-      new RoomRegistry(),
-      auth
-    )
+    const production = createGameServer(loadConfig({ APP_ENV: 'production', PORT: '0', HOST: '127.0.0.1' }), () => true, new RoomRegistry(), auth, services)
     const blocked = await fetch(new URL('/dev/join?room=a', production.url), { method: 'POST', headers: { cookie: alice } })
     expect(blocked.status).toBe(404)
     await production.stop(true)
