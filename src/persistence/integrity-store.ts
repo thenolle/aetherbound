@@ -33,8 +33,8 @@ export class IntegrityStore {
     this.selectMatch = db.prepare('SELECT mode, winner, account_0, account_1, ended_at FROM matches WHERE id = ?1')
     this.countInputs = db.prepare('SELECT COUNT(*) AS n FROM match_log WHERE match_id = ?1')
     const samePair = '((account_0 = ?1 AND account_1 = ?2) OR (account_0 = ?2 AND account_1 = ?1))'
-    this.countPair = db.prepare(`SELECT COUNT(*) AS n FROM matches WHERE mode = 'ranked' AND winner IS NOT NULL AND ${samePair} AND ended_at >= ?3`)
-    this.lastPair = db.prepare(`SELECT winner, account_0, account_1 FROM matches WHERE mode = 'ranked' AND winner IS NOT NULL AND ${samePair} ORDER BY ended_at DESC LIMIT ?3`)
+    this.countPair = db.prepare(`SELECT COUNT(*) AS n FROM matches WHERE mode = 'ranked' AND winner IS NOT NULL AND ${samePair} AND ended_at >= ?3 AND ended_at <= ?4`)
+    this.lastPair = db.prepare(`SELECT winner, account_0, account_1 FROM matches WHERE mode = 'ranked' AND winner IS NOT NULL AND ${samePair} AND ended_at <= ?4 ORDER BY ended_at DESC LIMIT ?3`)
     this.insertFlag = db.prepare('INSERT OR IGNORE INTO integrity_flags (id, match_id, kind, detail, created_at) VALUES (?1, ?2, ?3, ?4, ?5)')
     this.selectOpen = db.prepare('SELECT id, match_id, kind, detail, created_at FROM integrity_flags WHERE reviewed_at IS NULL ORDER BY created_at LIMIT ?1')
     this.markReviewed = db.prepare('UPDATE integrity_flags SET reviewed_at = ?1 WHERE id = ?2 AND reviewed_at IS NULL')
@@ -48,9 +48,9 @@ export class IntegrityStore {
     const flag = (kind: FlagKind, detail: string): void => { if (this.insertFlag.run(crypto.randomUUID(), matchId, kind, detail, this.now()).changes > 0) raised.push(kind) }
     const inputs = (this.countInputs.get(matchId) as { n: number }).n
     if (inputs < this.rules.shortMatchInputs) flag('short_match', `${inputs} recorded inputs`)
-    const recent = (this.countPair.get(match.account_0, match.account_1, match.ended_at - this.rules.windowMs) as { n: number }).n
+    const recent = (this.countPair.get(match.account_0, match.account_1, match.ended_at - this.rules.windowMs, match.ended_at) as { n: number }).n
     if (recent >= this.rules.repeatPairLimit) flag('repeat_pair', `${recent} ranked matches between the same two accounts in the last day`)
-    const last = this.lastPair.all(match.account_0, match.account_1, this.rules.tradeStreak) as { winner: number, account_0: string, account_1: string }[]
+    const last = this.lastPair.all(match.account_0, match.account_1, this.rules.tradeStreak, match.ended_at) as { winner: number, account_0: string, account_1: string }[]
     const winners = last.map((row) => (row.winner === 0 ? row.account_0 : row.account_1))
     const alternating = winners.length === this.rules.tradeStreak && winners.every((winner, index) => index === 0 || winner !== winners[index - 1])
     if (alternating) flag('win_trading', `the last ${this.rules.tradeStreak} matches between these accounts strictly alternated winners`)
