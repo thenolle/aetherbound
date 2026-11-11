@@ -23,9 +23,7 @@ const options: RoomOptions = {
 }
 
 const quiet = (): SeatLink => ({ send: () => undefined, close: () => undefined })
-
-const send = (room: Room, seat: PlayerIndex, link: SeatLink, sequence: number, id: string, command: Command): void =>
-  room.handleFrame(seat, link, encodeCommandFrame(sequence, id, command))
+const send = (room: Room, seat: PlayerIndex, link: SeatLink, sequence: number, id: string, command: Command): void => room.handleFrame(seat, link, encodeCommandFrame(sequence, id, command))
 
 let db: ReturnType<typeof openDatabase>
 let matches: SqliteMatchStore
@@ -53,7 +51,7 @@ function record(id: string, mode: MatchMode): void {
 
 describe('ranked results', () => {
   test('the finish hook runs once, only after the outcome is stored', () => {
-    const calls: { matchId: string, winner: PlayerIndex }[] = []
+    const calls: { matchId: string, winner: PlayerIndex, inputs: number }[] = []
     const room = new Room(fixtureSetup(11), options, { matchId: 'm-1', recorder: matches, accounts: [a, b], mode: 'ranked', onFinished: (result) => calls.push(result) })
     const seatA = quiet()
     const seatB = quiet()
@@ -63,7 +61,7 @@ describe('ranked results', () => {
     expect(calls).toEqual([])
     send(room, 1, seatB, 0, 'bye', { type: 'surrender' })
     send(room, 1, seatB, 1, 'bye', { type: 'surrender' })
-    expect(calls).toEqual([{ matchId: 'm-1', winner: 0 }])
+    expect(calls).toEqual([{ matchId: 'm-1', winner: 0, inputs: 2 }])
     expect(matches.load('m-1')?.outcome?.winner).toBe(0)
   })
 

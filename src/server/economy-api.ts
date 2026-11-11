@@ -7,6 +7,7 @@ import { GAME_LIMITS } from '../shared/lexicon'
 import { Rng } from '../shared/rng'
 import type { DeckService } from './decks'
 import { empty, json } from './origin'
+import { CRAFT_COST } from '../content/economy'
 
 export type EconomyServices = Readonly<{
   economy: EconomyStore
@@ -49,6 +50,15 @@ export async function handleEconomy(request: Request, url: URL, account: Account
         return economy.deleteDeck(account.id, url.searchParams.get('id') ?? '') ? empty(204) : json({ error: 'not_found' }, 404)
       case 'POST /api/decks/active':
         return economy.setActiveDeck(account.id, url.searchParams.get('id') ?? '') ? empty(204) : json({ error: 'not_found' }, 404)
+      case 'POST /api/craft': {
+        decks.ensureStarter(account.id)
+        const card = content.registry.get(url.searchParams.get('card') ?? '')
+        if (card === undefined) return json({ error: 'not_found' }, 404)
+        const cap = card.unique ? GAME_LIMITS.maxUniqueCopies : GAME_LIMITS.maxCopies
+        const crafted = economy.craft(account.id, card.id, CRAFT_COST[card.rarity], cap)
+        if (!crafted.ok) return json({ error: crafted.reason }, 409)
+        return json({ card: card.id, copies: crafted.copies, dust: crafted.dust }, 200)
+      }
       case 'GET /api/packs/odds':
         return json(PACK_TABLE, 200)
       case 'POST /api/packs/daily': {

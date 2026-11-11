@@ -29,7 +29,7 @@ export type RoomPersistence = Readonly<{
   recorder: MatchRecorder
   accounts?: readonly [string | null, string | null]
   mode?: MatchMode
-  onFinished?: (result: { matchId: string, winner: PlayerIndex }) => void
+  onFinished?: (result: { matchId: string, winner: PlayerIndex, inputs: number }) => void
 }>
 
 export const DEFAULT_ROOM_OPTIONS: RoomOptions = {
@@ -163,7 +163,7 @@ export class Room {
     if (winner === null || this.finished) return
     this.finished = true
     try {
-      persistence.onFinished?.({ matchId: persistence.matchId, winner })
+      persistence.onFinished?.({ matchId: persistence.matchId, winner, inputs: this.session.inputCount })
     } catch (error) {
       console.error('post-match hook failed', error)
     }

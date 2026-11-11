@@ -27,16 +27,8 @@ beforeEach(() => {
   }
 })
 
-const call = (method: string, path: string, body?: unknown) =>
-  handleEconomy(
-    new Request(`http://localhost:8080${path}`, { method, body: body === undefined ? undefined : JSON.stringify(body) }),
-    new URL(`http://localhost:8080${path}`),
-    account,
-    services
-  )
-
-const read = async (response: Response | null): Promise<Record<string, unknown>> =>
-  (await (response ?? new Response('{}')).json()) as Record<string, unknown>
+const call = (method: string, path: string, body?: unknown) => handleEconomy(new Request(`http://localhost:8080${path}`, { method, body: body === undefined ? undefined : JSON.stringify(body) }), new URL(`http://localhost:8080${path}`), account, services)
+const read = async (response: Response | null): Promise<Record<string, unknown>> => (await (response ?? new Response('{}')).json()) as Record<string, unknown>
 
 describe('economy api', () => {
   test('the collection starts with the starter cards and unknown routes fall through', async () => {
@@ -66,5 +58,12 @@ describe('economy api', () => {
     expect(opened.cards).toHaveLength(5)
     expect(opened.packs).toBe(0)
     expect(await read(await call('GET', '/api/packs/odds'))).toMatchObject({ version: 1, size: 5 })
+  })
+
+  test('crafting refuses unknown cards and cards already at the copy limit', async () => {
+    expect((await call('POST', '/api/craft?card=nope'))?.status).toBe(404)
+    const atLimit = await call('POST', '/api/craft?card=test-01')
+    expect(atLimit?.status).toBe(409)
+    expect(await read(atLimit)).toMatchObject({ error: 'at_copy_limit' })
   })
 })

@@ -5,13 +5,11 @@ import { DEFAULT_ROOM_OPTIONS, Room } from './room'
 import type { RoomOptions } from './room'
 
 export type SeatBinding = { room: Room, seat: PlayerIndex, accountId: string | null }
-
 export type OpenRoom = Readonly<{ room: Room, tokens: readonly [string, string] }>
-
 export type JoinResult = Readonly<{ seat: PlayerIndex, token: string }>
+export type FinishInfo = Readonly<{ matchId: string, accounts: readonly [string | null, string | null], winner: PlayerIndex, inputs: number, mode: MatchMode }>
 
 type NamedRoom = { open: OpenRoom, owners: [string | null, string | null] }
-
 type Assignment = Readonly<{ room: Room, result: JoinResult }>
 
 function randomToken(): string {
@@ -34,10 +32,12 @@ export class RoomRegistry {
   private readonly all = new Set<OpenRoom>()
   private readonly recorder: MatchRecorder | null
   private readonly onRankedResult: ((matchId: string, winnerId: string, loserId: string) => void) | null
+  private readonly onFinished: ((info: FinishInfo) => void) | null
 
-  constructor(recorder: MatchRecorder | null = null, onRankedResult: ((matchId: string, winnerId: string, loserId: string) => void) | null = null) {
+  constructor(recorder: MatchRecorder | null = null, onRankedResult: ((matchId: string, winnerId: string, loserId: string) => void) | null = null, onFinished: ((info: FinishInfo) => void) | null = null) {
     this.recorder = recorder
     this.onRankedResult = onRankedResult
+    this.onFinished = onFinished
   }
 
   open(setup: MatchSetup, options: RoomOptions = DEFAULT_ROOM_OPTIONS, accounts: readonly [string | null, string | null] = [null, null], mode: MatchMode = 'casual'): OpenRoom {
@@ -46,7 +46,7 @@ export class RoomRegistry {
       recorder: this.recorder,
       accounts,
       mode,
-      onFinished: mode === 'ranked' ? (result: { matchId: string, winner: PlayerIndex }) => this.rate(result.matchId, accounts, result.winner) : undefined
+      onFinished: (result: { matchId: string, winner: PlayerIndex, inputs: number }) => this.finish(result, accounts, mode),
     }
     const room = new Room(setup, options, persistence)
     const entry: OpenRoom = { room, tokens: [randomToken(), randomToken()] }
@@ -111,5 +111,10 @@ export class RoomRegistry {
     const winnerId = accounts[winner]
     const loserId = accounts[winner === 0 ? 1 : 0]
     if (winnerId !== null && loserId !== null && this.onRankedResult !== null) this.onRankedResult(matchId, winnerId, loserId)
+  }
+
+  private finish(result: { matchId: string, winner: PlayerIndex, inputs: number }, accounts: readonly [string | null, string | null], mode: MatchMode): void {
+    if (mode === 'ranked') try { this.rate(result.matchId, accounts, result.winner) } catch (error) { console.error('rating failed', error) }
+    this.onFinished?.({ matchId: result.matchId, accounts, winner: result.winner, inputs: result.inputs, mode })
   }
 }
