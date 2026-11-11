@@ -40,5 +40,4 @@ export const BRIARTHORN_CARDS: readonly CardDefinition[] = [
   card('hedgerow-trap', 'snare', 'common', 2, ['Hedgerow Trap', 'Piege de Haie'], ['The hedge was here first.', 'La haie etait la avant.'], {}, { trigger: 'enemy-attack', effects: [{ kind: 'blight', amount: 1, target: 'all-enemy-minions' }] }),
   card('oath-of-the-green-choir', 'oath', 'epic', 3, ['Oath of the Green Choir', 'Serment du Choeur Vert'], ['Three hymns, and the roots answer.', 'Trois hymnes, et les racines repondent.'], {}, { goal: 3, effects: [thorns(3), { kind: 'draw', count: 1 }] })
 ]
-
 export const BRIARTHORN_DECK: readonly Id<'card'>[] = BRIARTHORN_CARDS.filter((entry) => !entry.unique && entry.token !== true).flatMap((entry) => [entry.id, entry.id])

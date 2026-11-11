@@ -61,25 +61,7 @@ export const BRINE_LOCK_CARDS: readonly CardDefinition[] = [
   card('black-ice-notice', 'snare', 'common', 2, ['Black Ice Notice', 'Avis de Verglas'], ['Posted where the harbor road bends.', 'Affiche la ou la route du port tourne.'], {}, { trigger: 'enemy-play', effects: [{ kind: 'freeze', target: 'all-enemy-minions' }] }),
   card('oath-of-the-long-winter', 'oath', 'epic', 3, ['Oath of the Long Winter', 'Serment du Long Hiver'], ['Four crossings, then the harbor sleeps.', "Quatre traversees, puis le port s'endort."], {}, { goal: 4, effects: [{ kind: 'freeze', target: 'all-enemy-minions' }, { kind: 'heal', amount: 4, target: 'own-hero' }] }),
 ]
-
-const STARTER_PICKS = [
-  'brine-hand',
-  'tide-clerk',
-  'rime-deckhand',
-  'fog-signaler',
-  'gale-rigger',
-  'fog-barge',
-  'lock-keeper',
-  'frost-gauger',
-  'pack-ice-breaker',
-  'sky-captain-ilse',
-  'rimed-boathook',
-  'writ-of-embargo',
-  'writ-of-whiteout',
-  'sea-lock-ledger',
-  'harbor-chains'
-]
-
+const STARTER_PICKS = ['brine-hand', 'tide-clerk', 'rime-deckhand', 'fog-signaler', 'gale-rigger', 'fog-barge', 'lock-keeper', 'frost-gauger', 'pack-ice-breaker', 'sky-captain-ilse', 'rimed-boathook', 'writ-of-embargo', 'writ-of-whiteout', 'sea-lock-ledger', 'harbor-chains']
 export const BRINE_LOCK_DECK: readonly Id<'card'>[] = STARTER_PICKS.flatMap((pick) => {
   const id = parseId('card', pick)
   return [id, id]

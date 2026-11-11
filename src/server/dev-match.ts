@@ -5,8 +5,9 @@ import type { MatchSetup } from '../rules/engine'
 import { createRegistry } from '../shared/cards'
 import { BRIARTHORN_CARDS, BRIARTHORN_HERO } from '../content/briarthorn'
 import { CHOIR_CARDS, CHOIR_HERO } from '../content/choir'
+import { CINDER_VANE_CARDS, CINDER_VANE_HERO } from '../content/cinder-vane'
 
-const registry = createRegistry([...EXCHEQUER_CARDS, ...BRINE_LOCK_CARDS, ...BRIARTHORN_CARDS, ...CHOIR_CARDS])
+const registry = createRegistry([...EXCHEQUER_CARDS, ...BRINE_LOCK_CARDS, ...BRIARTHORN_CARDS, ...CHOIR_CARDS, ...CINDER_VANE_CARDS])
 
 export const devContent: ContentLookup = {
   registry,
@@ -14,7 +15,8 @@ export const devContent: ContentLookup = {
     [EXCHEQUER_HERO.id, EXCHEQUER_HERO],
     [BRINE_LOCK_HERO.id, BRINE_LOCK_HERO],
     [BRIARTHORN_HERO.id, BRIARTHORN_HERO],
-    [CHOIR_HERO.id, CHOIR_HERO]
+    [CHOIR_HERO.id, CHOIR_HERO],
+    [CINDER_VANE_HERO.id, CINDER_VANE_HERO]
   ])
 }
 
