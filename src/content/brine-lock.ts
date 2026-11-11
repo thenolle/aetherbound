@@ -3,8 +3,7 @@ import { parseId } from '../shared/ids'
 import type { Id } from '../shared/ids'
 import type { CardFamilyId, RarityId } from '../shared/lexicon'
 
-type Extra = Partial<Pick<CardDefinition, 'keywords' | 'effects' | 'onPlay' | 'onDeath' | 'trigger' | 'durability' | 'unique'>>
-
+type Extra = Partial<Pick<CardDefinition, 'keywords' | 'effects' | 'onPlay' | 'onDeath' | 'trigger' | 'durability' | 'unique' | 'goal'>>
 type Stats = Readonly<{ attack?: number, health?: number }>
 
 function card(id: string, family: CardFamilyId, rarity: RarityId, cost: number, names: readonly [string, string], flavor: readonly [string, string], stats: Stats, extra: Extra = {}): CardDefinition {
