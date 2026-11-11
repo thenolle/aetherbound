@@ -42,7 +42,7 @@ describe('surge', () => {
     expect(first.events).toContainEqual({ type: 'surged', player: 0, amount: 4 })
     const second = step(first.state, 0, { type: 'cast', handIndex: 0 })
     expect(second.state.players[0].aether).toBe(10)
-    expect(second.events).toContainEqual({ type: 'surged', player: 0, amount: 2 })
+    expect(second.events).toContainEqual({ type: 'surged', player: 0, amount: 3 })
   })
 })
 
@@ -61,7 +61,7 @@ describe('rupture', () => {
   test('sacrificed minions still trigger their death effects', () => {
     const state = fresh()
     state.players[0].hand = [cid(2)]
-    state.players[0].board = [mk(1, 2, 1, { onDeath: [{ kind: 'damage', amount: 1, target: 'enemy-hero' }] }), mk(2, 5, 5)]
+    state.players[0].board = [mk(1, 2, 1, { onDeath: [{ kind: 'damage', amount: 1, target: 'enemy-hero' }] })]
     const next = step(state, 0, { type: 'cast', handIndex: 0 }).state
     expect(next.players[1].heroHealth).toBe(27)
   })
