@@ -53,6 +53,9 @@ export class SqliteAccountStore {
   private readonly selectSessions: Prepared
   private readonly deleteSessionById: Prepared
   private readonly deleteAccountRow: Prepared
+  private readonly anonymizeWinner: Prepared
+  private readonly anonymizeLoser: Prepared
+  private readonly anonymizeOpponent: Prepared
 
   constructor(db: Database, now: () => number) {
     this.db = db
@@ -72,6 +75,9 @@ export class SqliteAccountStore {
     this.selectSessions = db.prepare('SELECT token_hash, created_at, expires_at, user_agent FROM sessions WHERE account_id = ?1 AND expires_at > ?2 ORDER BY created_at DESC')
     this.deleteSessionById = db.prepare('DELETE FROM sessions WHERE account_id = ?1 AND substr(token_hash, 1, 16) = ?2')
     this.deleteAccountRow = db.prepare('DELETE FROM accounts WHERE id = ?1')
+    this.anonymizeWinner = db.prepare("UPDATE rating_updates SET winner_id = 'deleted' WHERE winner_id = ?1")
+    this.anonymizeLoser = db.prepare("UPDATE rating_updates SET loser_id = 'deleted' WHERE loser_id = ?1")
+    this.anonymizeOpponent = db.prepare("UPDATE match_rewards SET opponent_id = 'deleted' WHERE opponent_id = ?1")
   }
 
   upsertGoogleAccount(sub: string, displayName: string): Account {
@@ -144,6 +150,11 @@ export class SqliteAccountStore {
   }
 
   deleteAccount(accountId: string): void {
-    this.deleteAccountRow.run(accountId)
+    withTransaction(this.db, () => {
+      this.anonymizeWinner.run(accountId)
+      this.anonymizeLoser.run(accountId)
+      this.anonymizeOpponent.run(accountId)
+      this.deleteAccountRow.run(accountId)
+    })
   }
 }

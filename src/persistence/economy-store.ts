@@ -1,16 +1,13 @@
 import type { Database } from 'bun:sqlite'
 import { withTransaction } from './database'
+import type { RewardRules } from '../content/economy'
 
 type Prepared = ReturnType<Database['prepare']>
 
 export type Balances = Readonly<{ packs: number, dust: number }>
-
 export type StoredDeck = Readonly<{ id: string, name: string, heroId: string, cards: readonly string[], updatedAt: number }>
-
 export type DeckDraft = Readonly<{ id: string, name: string, heroId: string, cards: readonly string[] }>
-
 export type PackCard = Readonly<{ id: string, duplicate: boolean }>
-
 export type PackResult = Readonly<{ openingId: string, cards: readonly PackCard[], dustGained: number, balances: Balances }>
 
 export type PackPlan = Readonly<{
@@ -21,11 +18,15 @@ export type PackPlan = Readonly<{
 
 type DeckRow = { id: string, name: string, hero_id: string, cards: string, updated_at: number }
 
+export type CraftResult =
+  | Readonly<{ ok: true, copies: number, dust: number }>
+  | Readonly<{ ok: false, reason: 'at_copy_limit' | 'not_enough_dust' }>
+
+export type RewardOutcome = 'granted' | 'duplicate' | 'daily_cap' | 'repeat_opponent'
+
 function parseCards(text: string): string[] {
   const value: unknown = JSON.parse(text)
-  if (!Array.isArray(value) || !value.every((item): item is string => typeof item === 'string')) {
-    throw new Error('corrupt cards column')
-  }
+  if (!Array.isArray(value) || !value.every((item): item is string => typeof item === 'string')) throw new Error('corrupt cards column')
   return value
 }
 
@@ -55,33 +56,37 @@ export class EconomyStore {
   private readonly clearActive: Prepared
   private readonly setActive: Prepared
   private readonly selectActive: Prepared
+  private readonly spendDust: Prepared
+  private readonly insertLog: Prepared
+  private readonly selectReward: Prepared
+  private readonly sumRewards: Prepared
+  private readonly countOpponent: Prepared
+  private readonly insertReward: Prepared
 
   constructor(db: Database, now: () => number) {
     this.db = db
     this.now = now
     this.selectCopies = db.prepare('SELECT card_id, copies FROM collection WHERE account_id = ?1')
-    this.upsertCopies = db.prepare(
-      'INSERT INTO collection (account_id, card_id, copies) VALUES (?1, ?2, ?3) ON CONFLICT (account_id, card_id) DO UPDATE SET copies = copies + excluded.copies'
-    )
+    this.upsertCopies = db.prepare('INSERT INTO collection (account_id, card_id, copies) VALUES (?1, ?2, ?3) ON CONFLICT (account_id, card_id) DO UPDATE SET copies = copies + excluded.copies')
     this.insertGrant = db.prepare('INSERT OR IGNORE INTO grants (account_id, grant_key, created_at) VALUES (?1, ?2, ?3)')
     this.ensureWallet = db.prepare('INSERT OR IGNORE INTO wallets (account_id) VALUES (?1)')
     this.selectWallet = db.prepare('SELECT packs, dust FROM wallets WHERE account_id = ?1')
     this.addWallet = db.prepare('UPDATE wallets SET packs = packs + ?2, dust = dust + ?3 WHERE account_id = ?1')
     this.spendPack = db.prepare('UPDATE wallets SET packs = packs - 1 WHERE account_id = ?1 AND packs > 0')
-    this.insertOpening = db.prepare(
-      'INSERT INTO pack_openings (id, account_id, table_version, seed, cards, dust_gained, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)'
-    )
-    this.upsertDeck = db.prepare(
-      `INSERT INTO decks (id, account_id, name, hero_id, cards, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-       ON CONFLICT (id) DO UPDATE SET name = excluded.name, hero_id = excluded.hero_id, cards = excluded.cards, updated_at = excluded.updated_at
-       WHERE decks.account_id = excluded.account_id`
-    )
+    this.insertOpening = db.prepare('INSERT INTO pack_openings (id, account_id, table_version, seed, cards, dust_gained, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)')
+    this.upsertDeck = db.prepare(`INSERT INTO decks (id, account_id, name, hero_id, cards, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT (id) DO UPDATE SET name = excluded.name, hero_id = excluded.hero_id, cards = excluded.cards, updated_at = excluded.updated_at WHERE decks.account_id = excluded.account_id`)
     this.selectDecks = db.prepare('SELECT id, name, hero_id, cards, updated_at FROM decks WHERE account_id = ?1 ORDER BY updated_at DESC')
     this.selectDeck = db.prepare('SELECT id, name, hero_id, cards, updated_at FROM decks WHERE id = ?1 AND account_id = ?2')
     this.deleteDeckRow = db.prepare('DELETE FROM decks WHERE id = ?1 AND account_id = ?2')
     this.clearActive = db.prepare('UPDATE accounts SET active_deck_id = NULL WHERE id = ?1 AND active_deck_id = ?2')
     this.setActive = db.prepare('UPDATE accounts SET active_deck_id = ?2 WHERE id = ?1')
     this.selectActive = db.prepare('SELECT active_deck_id FROM accounts WHERE id = ?1')
+    this.spendDust = db.prepare('UPDATE wallets SET dust = dust - ?2 WHERE account_id = ?1 AND dust >= ?2')
+    this.insertLog = db.prepare('INSERT INTO economy_log (id, account_id, kind, detail, created_at) VALUES (?1, ?2, ?3, ?4, ?5)')
+    this.selectReward = db.prepare('SELECT 1 AS found FROM match_rewards WHERE match_id = ?1 AND account_id = ?2')
+    this.sumRewards = db.prepare('SELECT COALESCE(SUM(packs), 0) AS total FROM match_rewards WHERE account_id = ?1 AND day = ?2')
+    this.countOpponent = db.prepare('SELECT COUNT(*) AS n FROM match_rewards WHERE account_id = ?1 AND day = ?2 AND opponent_id = ?3')
+    this.insertReward = db.prepare('INSERT INTO match_rewards (match_id, account_id, day, opponent_id, packs, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)')
   }
 
   collection(accountId: string): Map<string, number> {
@@ -175,5 +180,40 @@ export class EconomyStore {
     if (row === null || row.active_deck_id === null) return null
     const deck = this.selectDeck.get(row.active_deck_id, accountId) as DeckRow | null
     return deck === null ? null : toDeck(deck)
+  }
+
+  grantDust(accountId: string, grantKey: string, amount: number): boolean {
+    return withTransaction(this.db, () => {
+      this.ensureWallet.run(accountId)
+      if (this.insertGrant.run(accountId, grantKey, this.now()).changes === 0) return false
+      this.addWallet.run(accountId, 0, amount)
+      return true
+    })
+  }
+
+  craft(accountId: string, cardId: string, cost: number, cap: number): CraftResult {
+    return withTransaction<CraftResult>(this.db, () => {
+      this.ensureWallet.run(accountId)
+      const have = this.collection(accountId).get(cardId) ?? 0
+      if (have >= cap) return { ok: false, reason: 'at_copy_limit' }
+      if (this.spendDust.run(accountId, cost).changes === 0) return { ok: false, reason: 'not_enough_dust' }
+      this.upsertCopies.run(accountId, cardId, 1)
+      this.insertLog.run(crypto.randomUUID(), accountId, 'craft', JSON.stringify({ cardId, cost }), this.now())
+      return { ok: true, copies: have + 1, dust: this.balances(accountId).dust }
+    })
+  }
+
+  grantMatchReward(accountId: string, matchId: string, opponentId: string, day: string, rules: RewardRules): RewardOutcome {
+    return withTransaction<RewardOutcome>(this.db, () => {
+      this.ensureWallet.run(accountId)
+      if (this.selectReward.get(matchId, accountId) !== null) return 'duplicate'
+      const total = (this.sumRewards.get(accountId, day) as { total: number }).total
+      if (total + rules.packsPerMatch > rules.dailyPackCap) return 'daily_cap'
+      const repeats = (this.countOpponent.get(accountId, day, opponentId) as { n: number }).n
+      if (repeats >= rules.perOpponentPerDay) return 'repeat_opponent'
+      this.insertReward.run(matchId, accountId, day, opponentId, rules.packsPerMatch, this.now())
+      this.addWallet.run(accountId, rules.packsPerMatch, 0)
+      return 'granted'
+    })
   }
 }

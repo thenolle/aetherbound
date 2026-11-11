@@ -141,4 +141,28 @@ ALTER TABLE matches ADD COLUMN mode TEXT NOT NULL DEFAULT 'casual' CHECK (mode I
 CREATE INDEX matches_ranked_pending ON matches (mode, ended_at);
 `
   },
+  {
+    version: 6,
+    name: 'economy log and match rewards',
+    sql: `
+CREATE TABLE economy_log (
+  id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  detail TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX economy_log_account ON economy_log (account_id, created_at);
+CREATE TABLE match_rewards (
+  match_id TEXT NOT NULL REFERENCES matches (id) ON DELETE CASCADE,
+  account_id TEXT NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
+  day TEXT NOT NULL,
+  opponent_id TEXT NOT NULL,
+  packs INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (match_id, account_id)
+) WITHOUT ROWID;
+CREATE INDEX match_rewards_day ON match_rewards (account_id, day);
+`
+  },
 ]
