@@ -1,9 +1,9 @@
-import { MAX_EFFECTS_PER_CARD, needsChosenTarget } from './effects'
-import type { Effect } from './effects'
 import { DomainError } from './errors'
 import type { Id } from './ids'
 import { GAME_LIMITS } from './lexicon'
 import type { CardFamilyId, FactionId, KeywordId, LocalizedName, RarityId } from './lexicon'
+import { MAX_EFFECTS_PER_CARD, SNARE_TRIGGERS, needsChosenTarget } from './effects'
+import type { Effect, SnareTrigger } from './effects'
 
 export type CardFaction = FactionId | 'neutral'
 
@@ -22,6 +22,8 @@ export type CardDefinition = Readonly<{
   effects?: readonly Effect[]
   onPlay?: readonly Effect[]
   onDeath?: readonly Effect[]
+  trigger?: SnareTrigger
+  goal?: number
   flavor: LocalizedName
 }>
 
@@ -73,6 +75,16 @@ function assertCardDefinition(card: CardDefinition): void {
   if (card.family === 'holding') {
     if (card.durability === undefined || !Number.isInteger(card.durability) || card.durability < 1) fail('holdings need an integer durability >= 1')
     checkEffects(card.effects ?? [], fail)
+  }
+  if (card.family === 'snare') {
+    if (card.trigger === undefined || !SNARE_TRIGGERS.includes(card.trigger)) fail('snares need a valid trigger')
+    checkEffects(card.effects ?? [], fail)
+    if (needsChosenTarget(card.effects ?? [])) fail('snare effects cannot choose a target')
+  }
+  if (card.family === 'oath') {
+    if (card.goal === undefined || !Number.isInteger(card.goal) || card.goal < 1 || card.goal > 20) fail('oaths need an integer goal between 1 and 20')
+    checkEffects(card.effects ?? [], fail)
+    if (needsChosenTarget(card.effects ?? [])) fail('oath rewards cannot choose a target')
   }
   if (card.family === 'writ') checkEffects(card.effects ?? [], fail)
   if (card.onPlay !== undefined) checkEffects(card.onPlay, fail)

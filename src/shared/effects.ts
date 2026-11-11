@@ -14,3 +14,7 @@ export function effectTarget(effect: Effect): EffectTarget | null {
 export function needsChosenTarget(effects: readonly Effect[]): boolean {
   return effects.some((effect) => effectTarget(effect) === 'chosen-enemy-minion')
 }
+
+export const SNARE_TRIGGERS = ['enemy-play', 'enemy-cast', 'enemy-attack'] as const
+
+export type SnareTrigger = typeof SNARE_TRIGGERS[number]

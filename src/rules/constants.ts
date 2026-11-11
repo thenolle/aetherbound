@@ -3,5 +3,7 @@ export const RULES = {
   openingHand: [3, 4],
   turnSeconds: 75,
   settleRounds: 32,
-  holdingSlots: 2
+  holdingSlots: 2,
+  snareSlots: 3,
+  oathSlots: 1
 } as const

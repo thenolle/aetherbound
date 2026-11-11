@@ -28,6 +28,18 @@ export type Holding = {
   used: boolean
 }
 
+export type Snare = {
+  uid: number
+  cardId: Id<'card'>
+}
+
+export type Oath = {
+  uid: number
+  cardId: Id<'card'>
+  progress: number
+  goal: number
+}
+
 export type HeroAbility = {
   cost: number
   effects: Effect[]
@@ -43,6 +55,8 @@ export type PlayerState = {
   fatigue: number
   weapon: Weapon | null
   holdings: Holding[]
+  snares: Snare[]
+  oaths: Oath[]
   heroAttacked: boolean
   ability: HeroAbility
   abilityUsed: boolean
@@ -74,6 +88,8 @@ export type Command =
   | { type: 'hero_ability', targetUid?: number }
   | { type: 'end_turn' }
   | { type: 'surrender' }
+  | { type: 'set', handIndex: number }
+  | { type: 'swear', handIndex: number }
 
 export type GameEvent =
   | { type: 'turn_started', player: PlayerIndex, turn: number, aether: number }
@@ -97,3 +113,8 @@ export type GameEvent =
   | { type: 'minion_died', player: PlayerIndex, uid: number }
   | { type: 'surrendered', player: PlayerIndex }
   | { type: 'game_over', winner: PlayerIndex }
+  | { type: 'snare_set', player: PlayerIndex, uid: number, cardId: Id<'card'> }
+  | { type: 'snare_sprung', player: PlayerIndex, uid: number, cardId: Id<'card'> }
+  | { type: 'oath_sworn', player: PlayerIndex, uid: number, cardId: Id<'card'>, goal: number }
+  | { type: 'oath_progress', player: PlayerIndex, uid: number, progress: number }
+  | { type: 'oath_fulfilled', player: PlayerIndex, uid: number }

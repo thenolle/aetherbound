@@ -2,7 +2,7 @@ import { assertHeroDefinition } from '../shared/cards'
 import type { CardRegistry, HeroDefinition } from '../shared/cards'
 import { validateDeck } from '../shared/deck'
 import { needsChosenTarget } from '../shared/effects'
-import type { Effect } from '../shared/effects'
+import type { Effect, SnareTrigger } from '../shared/effects'
 import { DomainError } from '../shared/errors'
 import type { Id } from '../shared/ids'
 import { GAME_LIMITS } from '../shared/lexicon'
@@ -250,6 +250,7 @@ function playCard(
   side.board.splice(command.position, 0, minion)
   events.push({ type: 'minion_played', player: caster, uid: minion.uid, cardId, position: command.position })
   runEffects(state, caster, trigger, chosen, events)
+  advanceOaths(state, caster, registry, events)
   settleBoards(state, events)
 }
 
@@ -358,6 +359,79 @@ function activateHolding(
   settleBoards(state, events)
 }
 
+const SNARE_TRIGGER_BY_COMMAND: Partial<Record<Command['type'], SnareTrigger>> = {
+  play: 'enemy-play',
+  cast: 'enemy-cast',
+  attack: 'enemy-attack',
+  hero_attack: 'enemy-attack'
+}
+
+function setSnare(
+  state: MatchState,
+  command: Extract<Command, { type: 'set' }>,
+  registry: CardRegistry,
+  events: GameEvent[]
+): void {
+  const side = state.players[state.active]
+  const { cardId, card } = takeHandCard(state, command.handIndex, registry)
+  if (card.family !== 'snare') throw invalid('only snares can be set')
+  if (card.cost > side.aether) throw new DomainError('insufficient_aether', 'not enough Aether Pressure')
+  if (side.snares.length >= RULES.snareSlots) throw new DomainError('board_full', 'all snare slots are occupied')
+
+  side.aether -= card.cost
+  side.hand.splice(command.handIndex, 1)
+  const snare = { uid: state.nextUid, cardId }
+  state.nextUid += 1
+  side.snares.push(snare)
+  events.push({ type: 'snare_set', player: state.active, uid: snare.uid, cardId })
+}
+
+function fireSnare(state: MatchState, trigger: SnareTrigger, registry: CardRegistry, events: GameEvent[]): void {
+  if (state.winner !== null) return
+  const owner = other(state.active)
+  const side = state.players[owner]
+  const index = side.snares.findIndex((snare) => registry.get(snare.cardId)?.trigger === trigger)
+  if (index < 0) return
+  const [snare] = side.snares.splice(index, 1)
+  if (snare === undefined) return
+  events.push({ type: 'snare_sprung', player: owner, uid: snare.uid, cardId: snare.cardId })
+  runEffects(state, owner, registry.get(snare.cardId)?.effects ?? [], undefined, events)
+}
+
+function swearOath(
+  state: MatchState,
+  command: Extract<Command, { type: 'swear' }>,
+  registry: CardRegistry,
+  events: GameEvent[]
+): void {
+  const side = state.players[state.active]
+  const { cardId, card } = takeHandCard(state, command.handIndex, registry)
+  if (card.family !== 'oath') throw invalid('only oaths can be sworn')
+  if (card.goal === undefined) throw new DomainError('internal', 'oath without a goal')
+  if (card.cost > side.aether) throw new DomainError('insufficient_aether', 'not enough Aether Pressure')
+  if (side.oaths.length >= RULES.oathSlots) throw new DomainError('board_full', 'an oath is already sworn')
+
+  side.aether -= card.cost
+  side.hand.splice(command.handIndex, 1)
+  const oath = { uid: state.nextUid, cardId, progress: 0, goal: card.goal }
+  state.nextUid += 1
+  side.oaths.push(oath)
+  events.push({ type: 'oath_sworn', player: state.active, uid: oath.uid, cardId, goal: oath.goal })
+}
+
+function advanceOaths(state: MatchState, player: PlayerIndex, registry: CardRegistry, events: GameEvent[]): void {
+  const side = state.players[player]
+  for (const oath of [...side.oaths]) {
+    if (state.winner !== null) return
+    oath.progress += 1
+    events.push({ type: 'oath_progress', player, uid: oath.uid, progress: oath.progress })
+    if (oath.progress < oath.goal) continue
+    side.oaths = side.oaths.filter((entry) => entry !== oath)
+    events.push({ type: 'oath_fulfilled', player, uid: oath.uid })
+    runEffects(state, player, registry.get(oath.cardId)?.effects ?? [], undefined, events)
+  }
+}
+
 function resolveAttack(
   state: MatchState,
   command: Extract<Command, { type: 'attack' }>,
@@ -436,6 +510,8 @@ export function createMatch(setup: MatchSetup): StepResult {
       fatigue: 0,
       weapon: null,
       holdings: [],
+      snares: [],
+      oaths: [],
       heroAttacked: false,
       ability: { cost: entry.hero.ability.cost, effects: [...entry.hero.ability.effects] },
       abilityUsed: false,
@@ -498,6 +574,12 @@ export function applyCommand(
     case 'attack':
       resolveAttack(next, command, events)
       break
+    case 'set':
+      setSnare(next, command, registry, events)
+      break
+    case 'swear':
+      swearOath(next, command, registry, events)
+      break
     case 'hero_attack':
       resolveHeroAttack(next, command, events)
       break
@@ -509,6 +591,11 @@ export function applyCommand(
       break
     default:
       throw invalid('unknown command')
+  }
+  const trigger = SNARE_TRIGGER_BY_COMMAND[command.type]
+  if (trigger !== undefined && next.winner === null) {
+    fireSnare(next, trigger, registry, events)
+    settleBoards(next, events)
   }
   return { state: next, events }
 }

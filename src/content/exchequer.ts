@@ -189,6 +189,30 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
     flavor: { en: 'Every crossing is logged. Every log is billed.', fr: 'Chaque passage est consigne. Chaque consignation est facturee.' }
   },
   {
+    id: parseId('card', 'distraint-notice'),
+    name: { en: 'Distraint Notice', fr: 'Avis de Saisie' },
+    faction: 'exchequer',
+    family: 'snare',
+    rarity: 'rare',
+    cost: 2,
+    unique: false,
+    trigger: 'enemy-play',
+    effects: [{ kind: 'damage', amount: 2, target: 'enemy-hero' }],
+    flavor: { en: 'Posted on the door before the debtor reads it.', fr: "Affiche sur la porte avant que le debiteur ne la lise." }
+  },
+  {
+    id: parseId('card', 'oath-of-collection'),
+    name: { en: 'Oath of Collection', fr: 'Serment de Recouvrement' },
+    faction: 'exchequer',
+    family: 'oath',
+    rarity: 'epic',
+    cost: 2,
+    unique: false,
+    goal: 3,
+    effects: [{ kind: 'draw', count: 2 }, { kind: 'heal', amount: 3, target: 'own-hero' }],
+    flavor: { en: 'Three accounts closed, and the ledger balances itself.', fr: 'Trois comptes clos, et le registre s equilibre de lui-meme.' }
+  },
+  {
     id: parseId('card', 'writ-of-seizure'),
     name: { en: 'Writ of Seizure', fr: 'Mandat de Saisie' },
     faction: 'exchequer',
@@ -223,23 +247,7 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
   }
 ]
 
-const STARTER_PICKS = [
-  'tally-clerk',
-  'iron-clad-levy',
-  'toll-warden',
-  'tithe-hound',
-  'customs-pikeman',
-  'bailiff-vane',
-  'surveyor-pell',
-  'collector-brandt',
-  'seal-bearer',
-  'chain-marshal',
-  'assessors-pike',
-  'toll-bridge',
-  'writ-of-seizure',
-  'writ-of-levy',
-  'audit-of-arrears'
-]
+const STARTER_PICKS: readonly Id<'card'>[] = EXCHEQUER_CARDS.map((card) => card.id)
 
 export const EXCHEQUER_DECK: readonly Id<'card'>[] = STARTER_PICKS.flatMap((pick) => {
   const id = parseId('card', pick)
