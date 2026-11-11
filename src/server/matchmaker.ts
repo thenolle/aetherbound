@@ -17,12 +17,12 @@ const defaultCoin = (): boolean => (crypto.getRandomValues(new Uint8Array(1))[0]
 export class Matchmaker {
   private readonly waiting: Waiting[] = []
   private readonly rooms: RoomRegistry
-  private readonly makeSetup: () => MatchSetup
+  private readonly makeSetup: (accounts: readonly [string, string]) => MatchSetup
   private readonly now: () => number
   private readonly coin: () => boolean
   private readonly maxWaitMs: number
 
-  constructor(rooms: RoomRegistry, makeSetup: () => MatchSetup, now: () => number, options: MatchmakerOptions = {}) {
+  constructor(rooms: RoomRegistry, makeSetup: (accounts: readonly [string, string]) => MatchSetup, now: () => number, options: MatchmakerOptions = {}) {
     this.rooms = rooms
     this.makeSetup = makeSetup
     this.now = now
@@ -65,7 +65,8 @@ export class Matchmaker {
       const first = this.waiting.shift()
       const second = this.waiting.shift()
       if (first === undefined || second === undefined) return
-      this.rooms.openMatch(this.coin() ? [first.accountId, second.accountId] : [second.accountId, first.accountId], this.makeSetup)
+      const pair: readonly [string, string] = this.coin() ? [first.accountId, second.accountId] : [second.accountId, first.accountId]
+      this.rooms.openMatch(pair, () => this.makeSetup(pair))
     }
   }
 }

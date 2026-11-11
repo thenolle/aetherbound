@@ -7,10 +7,13 @@ import { MIGRATIONS } from '../persistence/migrations'
 import { ConfigError, loadConfig } from '../shared/config'
 import { createLogger } from '../shared/log'
 import { Auth } from './auth'
-import { devContent, devMatchSetup } from './dev-match'
+import { devContent } from './dev-match'
 import { createGameServer } from './gateway'
 import { Matchmaker } from './matchmaker'
 import { RoomRegistry } from './rooms'
+import { EXCHEQUER_DECK, EXCHEQUER_HERO } from '../content/exchequer'
+import { EconomyStore } from '../persistence/economy-store'
+import { DeckService } from './decks'
 
 try {
   const config = loadConfig(process.env)
@@ -21,13 +24,15 @@ try {
   const accounts = new SqliteAccountStore(database, () => Date.now())
   const matchStore = new SqliteMatchStore(database)
   const rooms = new RoomRegistry(matchStore)
-  const matchmaker = new Matchmaker(rooms, devMatchSetup, () => Date.now())
+  const economy = new EconomyStore(database, () => Date.now())
+  const decks = new DeckService(economy, devContent, { hero: EXCHEQUER_HERO, deck: EXCHEQUER_DECK })
+  const matchmaker = new Matchmaker(rooms, (pair) => decks.setupFor(pair), () => Date.now())
   const history = new HistoryService(matchStore, devContent)
   const google = config.googleClientId !== null && config.googleClientSecret !== null ? new GoogleOidc({ clientId: config.googleClientId, clientSecret: config.googleClientSecret, redirectUri: `${config.publicOrigin}/auth/google/callback` }) : null
   if (google === null) log.warn('google sign-in is not configured: set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET')
   const auth = new Auth({ google, accounts, publicOrigin: config.publicOrigin, onAccountDeleted: (accountId) => matchmaker.leave(accountId) })
   let ready = true
-  const server = createGameServer(config, () => ready, rooms, auth, { matchmaker, history })
+  const server = createGameServer(config, () => ready, rooms, auth, { matchmaker, history, economy: { economy, decks, content: devContent, now: () => Date.now() } })
   const sweeper = setInterval(() => {
     accounts.sweepExpired()
     matchmaker.sweep()
