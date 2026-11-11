@@ -17,6 +17,8 @@ import { createGameServer } from './gateway'
 import { Matchmaker } from './matchmaker'
 import { makeRewardHook } from './rewards'
 import { RoomRegistry } from './rooms'
+import { IntegrityStore } from '../persistence/integrity-store'
+import { SeasonStore } from '../persistence/season-store'
 
 try {
   const config = loadConfig(process.env)
@@ -29,16 +31,22 @@ try {
   const economy = new EconomyStore(database, () => Date.now())
   const decks = new DeckService(economy, devContent, { hero: EXCHEQUER_HERO, deck: EXCHEQUER_DECK })
   const ratings = new SqliteRatingStore(database, () => Date.now())
+  const integrity = new IntegrityStore(database, () => Date.now())
+  const seasons = new SeasonStore(database, () => Date.now())
+  seasons.current()
   const repaired = ratings.reconcile()
   if (repaired > 0) log.info('applied ranked results missed before the last shutdown', { count: repaired })
-  const rooms = new RoomRegistry(matchStore, (matchId, winnerId, loserId) => { ratings.applyResult(matchId, winnerId, loserId) }, makeRewardHook(economy, REWARD_RULES, () => Date.now()))
+  const rooms = new RoomRegistry(matchStore, (matchId, winnerId, loserId) => {
+    ratings.applyResult(matchId, winnerId, loserId)
+    integrity.inspect(matchId)
+  }, makeRewardHook(economy, REWARD_RULES, () => Date.now()))
   const matchmaker = new Matchmaker(rooms, (pair) => decks.setupFor(pair), () => Date.now(), { ratingOf: (id) => ratings.get(id).mmr })
   const history = new HistoryService(matchStore, devContent)
   const google = config.googleClientId !== null && config.googleClientSecret !== null ? new GoogleOidc({ clientId: config.googleClientId, clientSecret: config.googleClientSecret, redirectUri: `${config.publicOrigin}/auth/google/callback` }) : null
   if (google === null) log.warn('google sign-in is not configured: set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET')
   const auth = new Auth({ google, accounts, publicOrigin: config.publicOrigin, onAccountDeleted: (accountId) => matchmaker.leave(accountId) })
   let ready = true
-  const server = createGameServer(config, () => ready, rooms, auth, { matchmaker, history, ratings, economy: { economy, decks, content: devContent, now: () => Date.now() } })
+  const server = createGameServer(config, () => ready, rooms, auth, { matchmaker, history, ratings, economy: { economy, decks, content: devContent, now: () => Date.now() }, seasons, integrity })
   const sweeper = setInterval(() => {
     accounts.sweepExpired()
     matchmaker.sweep()

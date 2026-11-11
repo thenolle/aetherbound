@@ -5,12 +5,16 @@ import { empty, json, originAllowed } from './origin'
 import { handleEconomy } from './economy-api'
 import type { EconomyServices } from './economy-api'
 import type { SqliteRatingStore } from '../persistence/rating-store'
+import type { IntegrityStore } from '../persistence/integrity-store'
+import type { SeasonStore } from '../persistence/season-store'
 
 export type ApiServices = Readonly<{
   matchmaker: Matchmaker
   history: HistoryService | null
   economy?: EconomyServices
   ratings?: SqliteRatingStore
+  seasons?: SeasonStore
+  integrity?: IntegrityStore
 }>
 
 const REPLAY_PATH = /^\/api\/replay\/([0-9a-f-]{36})$/
@@ -27,6 +31,13 @@ export async function handleApi(request: Request, url: URL, auth: Auth, services
     return json(services.matchmaker.join(account.id, mode), 200)
   }
   if (route === 'GET /api/rank' && services.ratings !== undefined) return json(services.ratings.rankFor(account.id), 200)
+  if (route === 'GET /api/leaderboard' && services.seasons !== undefined) return json({ season: services.seasons.current(), entries: services.seasons.leaderboard(50) }, 200)
+  if (url.pathname.startsWith('/api/admin/')) {
+    if (account.role !== 'admin' || services.integrity === undefined) return json({ error: 'not_found' }, 404)
+    if (route === 'GET /api/admin/flags') return json({ flags: services.integrity.openFlags(100) }, 200)
+    if (route === 'POST /api/admin/flags/review') return services.integrity.review(url.searchParams.get('id') ?? '') ? empty(204) : json({ error: 'not_found' }, 404)
+    return json({ error: 'not_found' }, 404)
+  }
   if (route === 'GET /api/queue/status') return json(services.matchmaker.status(account.id), 200)
   if (route === 'POST /api/queue/leave') {
     services.matchmaker.leave(account.id)
