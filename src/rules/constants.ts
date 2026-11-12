@@ -7,4 +7,5 @@ export const RULES = {
   snareSlots: 3,
   oathSlots: 1,
   maxBlight: 5,
+  secondSeatCoin: 1,
 } as const

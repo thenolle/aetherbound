@@ -159,12 +159,18 @@ describe('turns', () => {
   test('Aether grows each turn and caps at ten', () => {
     const afterOne = step(fresh(), 0, endTurn).state
     expect(afterOne.active).toBe(1)
-    expect(afterOne.players[1]).toMatchObject({ aetherMax: 1, aether: 1 })
+    expect(afterOne.players[1]).toMatchObject({ aetherMax: 1, aether: 2 })
     expect(step(afterOne, 1, endTurn).state.players[0].aetherMax).toBe(2)
-
     const capped = fresh()
     capped.players[1].aetherMax = 10
     expect(step(capped, 0, endTurn).state.players[1]).toMatchObject({ aetherMax: 10, aether: 10 })
+  })
+
+  test('the second seat gets a one-time coin on its first turn only', () => {
+    const afterOne = step(fresh(), 0, endTurn).state
+    expect(afterOne.players[1].aether).toBe(2)
+    const afterTwo = step(step(afterOne, 1, endTurn).state, 0, endTurn).state
+    expect(afterTwo.players[1].aether).toBe(2)
   })
 
   test('fatigue escalates on an empty deck', () => {

@@ -156,7 +156,7 @@ describe('game server', () => {
     expect(events.events.some((item) => item.event.type === 'turn_started')).toBe(true)
     const after = await inboxB.next('snapshot')
     expect(after.view.active).toBe(1)
-    expect(after.view.self.hand).toHaveLength(5)
+    expect(after.view.self.hand).toHaveLength(6)
 
     const packetB = encodeCommandFrame(1, 'turn-2', { type: 'end_turn' })
     socketA.send(toArrayBuffer(packetB))

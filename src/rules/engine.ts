@@ -71,6 +71,7 @@ function startTurn(state: MatchState, events: GameEvent[]): void {
   side.aetherMax = Math.min(GAME_LIMITS.aetherPressureMax, side.aetherMax + 1)
   side.aether = Math.max(0, side.aetherMax - side.tariff)
   side.tariff = 0
+  if (state.turn === 2) side.aether = Math.min(GAME_LIMITS.aetherPressureMax, side.aether + RULES.secondSeatCoin)
   side.heroAttacked = false
   side.abilityUsed = false
   for (const holding of side.holdings) holding.used = false
