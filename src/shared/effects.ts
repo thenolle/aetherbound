@@ -14,6 +14,8 @@ export type Effect =
   | Readonly<{ kind: 'buff', attack: number, health: number }>
   | Readonly<{ kind: 'steal', count: number, take: boolean }>
   | Readonly<{ kind: 'counterfeit' }>
+  | Readonly<{ kind: 'ward' }>
+  | Readonly<{ kind: 'if_healed', threshold: number, then: readonly Effect[] }>
   | Readonly<{ kind: 'draw', count: number }>
   | Readonly<{ kind: 'tariff', amount: number }>
 
@@ -25,11 +27,15 @@ export const SNARE_TRIGGERS = ['enemy-play', 'enemy-cast', 'enemy-attack'] as co
 
 export type SnareTrigger = typeof SNARE_TRIGGERS[number]
 
+export function flattenEffects(effects: readonly Effect[]): Effect[] {
+  return effects.flatMap((effect): Effect[] => (effect.kind === 'if_healed' ? [effect, ...effect.then] : [effect]))
+}
+
 export function effectTarget(effect: Effect): EffectTarget | null {
   if (effect.kind === 'counterfeit') return 'chosen-enemy-minion'
   return effect.kind === 'damage' || effect.kind === 'heal' || effect.kind === 'freeze' || effect.kind === 'blight' ? effect.target : null
 }
 
 export function needsChosenTarget(effects: readonly Effect[]): boolean {
-  return effects.some((effect) => effectTarget(effect) === 'chosen-enemy-minion')
+  return flattenEffects(effects).some((effect) => effectTarget(effect) === 'chosen-enemy-minion')
 }

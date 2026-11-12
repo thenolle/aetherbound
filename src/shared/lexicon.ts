@@ -98,13 +98,14 @@ export const RARITIES: Readonly<Record<RarityId, LocalizedName>> = {
   legendary: { en: 'Legendary', fr: 'Legendaire' }
 }
 
-export const KEYWORD_IDS = ['shield-wall', 'haste', 'echo'] as const
+export const KEYWORD_IDS = ['shield-wall', 'haste', 'echo', 'glass-ward'] as const
 export type KeywordId = typeof KEYWORD_IDS[number]
 
 export const KEYWORDS: Readonly<Record<KeywordId, LocalizedName>> = {
   'shield-wall': { en: 'Shield-Wall', fr: 'Mur de Boucliers' },
   haste: { en: 'Haste', fr: 'Hate' },
   echo: { en: 'Echo', fr: 'Echo' },
+  'glass-ward': { en: 'Glass-Ward', fr: 'Garde de Verre' },
 }
 
 export const BOARD_IDS = [

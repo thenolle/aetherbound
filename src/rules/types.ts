@@ -14,6 +14,7 @@ export type Minion = {
   frozen?: boolean
   blight?: number
   grows?: Readonly<{ attack: number, health: number }>
+  warded?: boolean
   keywords: KeywordId[]
   onDeath: Effect[]
 }
@@ -57,6 +58,7 @@ export type PlayerState = {
   tariff: number
   fatigue: number
   fallen: number
+  healed: number
   weapon: Weapon | null
   holdings: Holding[]
   snares: Snare[]
@@ -130,3 +132,5 @@ export type GameEvent =
   | { type: 'buffed', player: PlayerIndex, uid: number, attack: number, health: number }
   | { type: 'forged', player: PlayerIndex, attack: number, durability: number }
   | { type: 'card_stolen', player: PlayerIndex, cardId: Id<'card'> }
+  | { type: 'warded', player: PlayerIndex, uid: number }
+  | { type: 'ward_broken', player: PlayerIndex, uid: number }

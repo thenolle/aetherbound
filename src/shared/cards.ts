@@ -2,7 +2,7 @@ import { DomainError } from './errors'
 import type { Id } from './ids'
 import { GAME_LIMITS } from './lexicon'
 import type { CardFamilyId, FactionId, KeywordId, LocalizedName, RarityId } from './lexicon'
-import { MAX_EFFECTS_PER_CARD, SNARE_TRIGGERS, needsChosenTarget } from './effects'
+import { MAX_EFFECTS_PER_CARD, SNARE_TRIGGERS, needsChosenTarget, flattenEffects } from './effects'
 import type { Effect, SnareTrigger, TokenEffect } from './effects'
 
 export type CardFaction = FactionId | 'neutral'
@@ -42,7 +42,7 @@ export type CardRegistry = ReadonlyMap<string, CardDefinition>
 
 type Fail = (reason: string) => never
 
-function checkEffects(effects: readonly Effect[], fail: Fail): void {
+function checkEffects(effects: readonly Effect[], fail: Fail, nested = false): void {
   if (effects.length === 0 || effects.length > MAX_EFFECTS_PER_CARD) fail(`effects need 1 to ${MAX_EFFECTS_PER_CARD} entries`)
   for (const effect of effects) {
     if (effect.kind === 'draw') {
@@ -68,6 +68,12 @@ function checkEffects(effects: readonly Effect[], fail: Fail): void {
       if (!valid || effect.attack + effect.health === 0) fail('buff needs integer bonuses from 0 to 9, not both zero')
     } else if (effect.kind === 'steal') {
       if (!Number.isInteger(effect.count) || effect.count < 1 || effect.count > 5) fail('steal count must be 1 to 5')
+    } else if (effect.kind === 'if_healed') {
+      if (nested) fail('miracles cannot nest')
+      if (!Number.isInteger(effect.threshold) || effect.threshold < 1 || effect.threshold > 99) fail('miracle threshold must be 1 to 99')
+      checkEffects(effect.then, fail, true)
+    } else if (effect.kind === 'ward') {
+      continue
     } else if ('amount' in effect && (!Number.isInteger(effect.amount) || effect.amount < 1 || effect.amount > 99)) {
       fail('effect amount must be 1 to 99')
     }
@@ -125,7 +131,7 @@ export function assertHeroDefinition(hero: HeroDefinition): void {
 }
 
 export function summonsOf(card: CardDefinition): TokenEffect[] {
-  return [...(card.effects ?? []), ...(card.onPlay ?? []), ...(card.onDeath ?? [])].filter(
+  return flattenEffects([...(card.effects ?? []), ...(card.onPlay ?? []), ...(card.onDeath ?? [])]).filter(
     (effect): effect is TokenEffect => effect.kind === 'summon' || effect.kind === 'raise'
   )
 }

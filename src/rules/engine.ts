@@ -44,6 +44,7 @@ function healHero(state: MatchState, player: PlayerIndex, amount: number, events
   const gained = Math.min(amount, side.heroMaxHealth - side.heroHealth)
   if (gained <= 0) return
   side.heroHealth += gained
+  side.healed += gained
   events.push({ type: 'healed', player, uid: null, amount: gained })
 }
 
@@ -85,8 +86,7 @@ function startTurn(state: MatchState, events: GameEvent[]): void {
   for (const minion of side.board) {
     const stacks = minion.blight ?? 0
     if (stacks <= 0) continue
-    minion.health -= stacks
-    events.push({ type: 'damaged', player: state.active, uid: minion.uid, amount: stacks })
+    hurtMinion(state.active, minion, stacks, events)
     if (stacks > 1) minion.blight = stacks - 1
     else delete minion.blight
   }
@@ -115,6 +115,16 @@ function placeToken(state: MatchState, caster: PlayerIndex, token: TokenEffect, 
   side.board.push(minion)
   events.push({ type: 'minion_summoned', player: caster, uid: minion.uid, cardId: token.cardId })
   return true
+}
+
+function hurtMinion(owner: PlayerIndex, minion: Minion, amount: number, events: GameEvent[]): void {
+  if (minion.warded === true) {
+    delete minion.warded
+    events.push({ type: 'ward_broken', player: owner, uid: minion.uid })
+    return
+  }
+  minion.health -= amount
+  events.push({ type: 'damaged', player: owner, uid: minion.uid, amount })
 }
 
 function applyEffect(state: MatchState, caster: PlayerIndex, effect: Effect, chosen: Minion | undefined, events: GameEvent[]): void {
@@ -244,6 +254,21 @@ function applyEffect(state: MatchState, caster: PlayerIndex, effect: Effect, cho
     events.push({ type: 'minion_summoned', player: caster, uid: copy.uid, cardId: copy.cardId })
     return
   }
+  if (effect.kind === 'ward') {
+    for (const minion of state.players[caster].board) {
+      minion.warded = true
+      events.push({ type: 'warded', player: caster, uid: minion.uid })
+    }
+    return
+  }
+  if (effect.kind === 'if_healed') {
+    if (state.players[caster].healed < effect.threshold) return
+    for (const inner of effect.then) {
+      if (state.winner !== null) break
+      applyEffect(state, caster, inner, chosen, events)
+    }
+    return
+  }
   if (effect.kind !== 'damage' && effect.kind !== 'heal') return
   const amount = effect.amount
   const harmful = effect.kind === 'damage'
@@ -253,13 +278,13 @@ function applyEffect(state: MatchState, caster: PlayerIndex, effect: Effect, cho
   }
   const affectMinion = (player: PlayerIndex, minion: Minion): void => {
     if (harmful) {
-      minion.health -= amount
-      events.push({ type: 'damaged', player, uid: minion.uid, amount })
+      hurtMinion(player, minion, amount, events)
       return
     }
     const gained = Math.min(amount, minion.maxHealth - minion.health)
     if (gained <= 0) return
     minion.health += gained
+    state.players[player].healed += gained
     events.push({ type: 'healed', player, uid: minion.uid, amount: gained })
   }
   switch (effect.target) {
@@ -383,6 +408,7 @@ function playCard(state: MatchState, command: Extract<Command, { type: 'play' }>
     keywords,
     onDeath: [...(card.onDeath ?? [])],
     ...(card.grows === undefined ? {} : { grows: card.grows }),
+    ...(keywords.includes('glass-ward') ? { warded: true } : {})
   }
   state.nextUid += 1
   side.board.splice(command.position, 0, minion)
@@ -545,12 +571,8 @@ function resolveAttack(state: MatchState, command: Extract<Command, { type: 'att
   }
   const dealt = attacker.attack
   const received = defender.attack
-  defender.health -= dealt
-  events.push({ type: 'damaged', player: defenderIndex, uid: defender.uid, amount: dealt })
-  if (received > 0) {
-    attacker.health -= received
-    events.push({ type: 'damaged', player: attackerIndex, uid: attacker.uid, amount: received })
-  }
+  hurtMinion(defenderIndex, defender, dealt, events)
+  if (received > 0) hurtMinion(attackerIndex, attacker, received, events)
   settleBoards(state, events)
 }
 
@@ -567,8 +589,7 @@ function resolveHeroAttack(state: MatchState, command: Extract<Command, { type: 
   if (defender === null) {
     damageHero(state, defenderIndex, weapon.attack, events)
   } else {
-    defender.health -= weapon.attack
-    events.push({ type: 'damaged', player: defenderIndex, uid: defender.uid, amount: weapon.attack })
+    hurtMinion(defenderIndex, defender, weapon.attack, events)
     if (defender.attack > 0) damageHero(state, attackerIndex, defender.attack, events)
   }
   weapon.durability -= 1
@@ -601,6 +622,7 @@ export function createMatch(setup: MatchSetup): StepResult {
       ability: { cost: entry.hero.ability.cost, effects: [...entry.hero.ability.effects] },
       abilityUsed: false,
       fallen: 0,
+      healed: 0,
       deck: rng.shuffle(entry.deck),
       hand: [],
       board: []

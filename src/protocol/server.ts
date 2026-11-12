@@ -64,6 +64,8 @@ export const EVENT_IDS = {
   buffed: 32,
   forged: 33,
   card_stolen: 34,
+  warded: 35,
+  ward_broken: 36,
 } as const satisfies Record<ViewEvent['type'], number>
 
 const MESSAGE_TYPE_BY_ID = new Map<number, ServerMessage['type']>((Object.keys(MESSAGE_IDS) as ServerMessage['type'][]).map((type) => [MESSAGE_IDS[type], type]))
@@ -189,6 +191,14 @@ function writeEffect(w: ByteWriter, effect: Effect): void {
       w.varuint(effect.health)
       w.varuint(effect.count)
       return
+    case 'ward':
+      w.u8(16)
+      return
+    case 'if_healed':
+      w.u8(15)
+      w.varuint(effect.threshold)
+      writeList(w, effect.then, (inner) => writeEffect(w, inner))
+      return
     case 'draw':
       w.u8(2)
       w.varuint(effect.count)
@@ -237,7 +247,7 @@ function writeEffect(w: ByteWriter, effect: Effect): void {
   }
 }
 
-function readEffect(r: ByteReader): Effect {
+function readEffect(r: ByteReader, depth = 0): Effect {
   const kind = r.u8()
   if (kind === 0 || kind === 1) {
     const amount = r.varuint()
@@ -267,6 +277,13 @@ function readEffect(r: ByteReader): Effect {
   if (kind === 12) return { kind: 'buff', attack: r.varuint(), health: r.varuint() }
   if (kind === 13) return { kind: 'steal', count: r.varuint(), take: readBool(r) }
   if (kind === 14) return { kind: 'counterfeit' }
+  if (kind === 15) {
+    if (depth > 0) throw malformed('miracles cannot nest')
+    const threshold = r.varuint()
+    const then = readList(r, () => readEffect(r, depth + 1))
+    return { kind: 'if_healed', threshold, then }
+  }
+  if (kind === 16) return { kind: 'ward' }
   throw malformed('invalid effect kind')
 }
 
@@ -286,6 +303,7 @@ function writeMinion(w: ByteWriter, minion: Minion): void {
     w.varuint(minion.grows.attack)
     w.varuint(minion.grows.health)
   }
+  writeBool(w, minion.warded === true)
   writeList(w, minion.keywords, (keyword) => w.u8(KEYWORD_IDS.indexOf(keyword)))
   writeList(w, minion.onDeath, (effect) => writeEffect(w, effect))
 }
@@ -302,6 +320,7 @@ function readMinion(r: ByteReader): Minion {
   const growsFlag = r.u8()
   if (growsFlag > 1) throw malformed('invalid presence byte')
   const grows = growsFlag === 1 ? { attack: r.varuint(), health: r.varuint() } : null
+  const warded = readBool(r)
   const keywords = readList<KeywordId>(r, () => {
     const keyword = KEYWORD_IDS[r.u8()]
     if (keyword === undefined) throw malformed('invalid keyword')
@@ -318,6 +337,7 @@ function readMinion(r: ByteReader): Minion {
     ...(frozen ? { frozen: true } : {}),
     ...(blight > 0 ? { blight } : {}),
     ...(grows === null ? {} : { grows }),
+    ...(warded ? { warded: true } : {}),
     keywords,
     onDeath
   }
@@ -391,6 +411,7 @@ function writeSide(w: ByteWriter, side: SharedSide): void {
   w.varuint(side.tariff)
   w.varuint(side.fatigue)
   w.varuint(side.fallen)
+  w.varuint(side.healed)
   writeWeapon(w, side.weapon)
   writeList(w, side.holdings, (holding) => writeHolding(w, holding))
   writeList(w, side.oaths, (oath) => writeOath(w, oath))
@@ -411,6 +432,7 @@ function readSide(r: ByteReader): SharedSide {
   const tariff = r.varuint()
   const fatigue = r.varuint()
   const fallen = r.varuint()
+  const healed = r.varuint()
   const weapon = readWeapon(r)
   const holdings = readList(r, () => readHolding(r))
   const oaths = readList(r, () => readOath(r))
@@ -429,6 +451,7 @@ function readSide(r: ByteReader): SharedSide {
     tariff,
     fatigue,
     fallen,
+    healed,
     weapon,
     holdings,
     oaths,
@@ -572,6 +595,11 @@ function writeEvent(w: ByteWriter, event: ViewEvent): void {
       w.varuint(event.attack)
       w.varuint(event.health)
       return
+    case 'warded':
+    case 'ward_broken':
+      w.u8(event.player)
+      w.varuint(event.uid)
+      return
     case 'attacked':
       w.u8(event.player)
       w.varuint(event.attackerUid)
@@ -658,6 +686,8 @@ function readEvent(r: ByteReader): ViewEvent {
     case 'buffed': return { type, player: readPlayer(r), uid: r.varuint(), attack: r.varuint(), health: r.varuint() }
     case 'forged': return { type, player: readPlayer(r), attack: r.varuint(), durability: r.varuint() }
     case 'card_stolen': return { type, player: readPlayer(r), cardId: readOptCard(r) }
+    case 'warded':
+    case 'ward_broken': return { type, player: readPlayer(r), uid: r.varuint() }
   }
 }
 

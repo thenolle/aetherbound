@@ -45,6 +45,8 @@ const ALL_EVENTS: readonly ViewEvent[] = [
   { type: 'frozen', player: 1, uid: 5 },
   { type: 'minion_summoned', player: 0, uid: 12, cardId: cid(9) },
   { type: 'blighted', player: 1, uid: 5, stacks: 3 },
+  { type: 'warded', player: 0, uid: 4 },
+  { type: 'ward_broken', player: 1, uid: 5 },
   { type: 'grew', player: 0, uid: 12, attack: 4, health: 6 },
   { type: 'buffed', player: 0, uid: 4, attack: 3, health: 3 },
   { type: 'forged', player: 1, attack: 4, durability: 2 },
@@ -62,6 +64,7 @@ function richState() {
   state.players[0].weapon = { cardId: cid(1), attack: 2, durability: 1 }
   state.players[0].tariff = 1
   state.players[0].fallen = 3
+  state.players[0].healed = 5
   state.players[1].fallen = 1
   state.players[0].board = [{
     uid: 1,
@@ -70,6 +73,7 @@ function richState() {
     health: 1,
     maxHealth: 2,
     exhausted: true,
+    warded: true,
     keywords: ['shield-wall', 'haste', 'echo'],
     blight: 2,
     grows: { attack: 1, health: 2 },
@@ -90,6 +94,8 @@ function richState() {
       { kind: 'heal', amount: 2, target: 'all-own-minions' },
       { kind: 'steal', count: 2, take: true },
       { kind: 'counterfeit' },
+      { kind: 'ward' },
+      { kind: 'if_healed', threshold: 6, then: [{ kind: 'damage', amount: 2, target: 'enemy-hero' }, { kind: 'draw', count: 1 }] },
     ]
   }]
   state.players[1].board = [{ uid: 2, cardId: cid(3), attack: 3, health: 3, maxHealth: 3, exhausted: false, keywords: [], onDeath: [] }]

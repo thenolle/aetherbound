@@ -22,7 +22,7 @@ const targetText = (target: AttackTarget): string => (target.kind === 'hero' ? '
 
 function minionText(minion: Minion, registry: CardRegistry): string {
   const keywords = minion.keywords.length > 0 ? ` [${minion.keywords.join(',')}]` : ''
-  return `#${minion.uid} ${nameOf(registry, minion.cardId)} ${minion.attack}/${minion.health}${keywords}${minion.exhausted ? ` (rest)${minion.frozen === true ? ' (frozen)' : ''}` : ''}${minion.blight === undefined ? '' : ` (blight ${minion.blight})`}`
+  return `#${minion.uid} ${nameOf(registry, minion.cardId)} ${minion.attack}/${minion.health}${keywords}${minion.exhausted ? ` (rest)${minion.frozen === true ? ' (frozen)' : ''}` : ''}${minion.blight === undefined ? '' : ` (blight ${minion.blight})`}${minion.warded === true ? ' (warded)' : ''}`
 }
 
 function holdingText(holding: Holding, registry: CardRegistry): string { return `#${holding.uid} ${nameOf(registry, holding.cardId)} x${holding.charges}${holding.used ? ' (used)' : ''}` }
@@ -66,6 +66,8 @@ export function describeEvent(event: ViewEvent, registry: CardRegistry): string 
     case 'buffed': return `#${event.uid} is reinforced to ${event.attack}/${event.health}`
     case 'forged': return `${who(event.player)} forges the iron to ${event.attack}/${event.durability}`
     case 'card_stolen': return `${who(event.player)} steals ${card(event.cardId)}`
+    case 'warded': return `#${event.uid} is warded`
+    case 'ward_broken': return `the ward on #${event.uid} shatters`
   }
 }
 
@@ -93,7 +95,7 @@ export function buildHud(input: HudInput): HudLine[] {
 
   const foe = view.opponent
   add('-- opponent --', 'dim')
-  add(`hp ${foe.heroHealth}/${foe.heroMaxHealth}  aether ${foe.aether}/${foe.aetherMax}  hand ${foe.handCount}  deck ${foe.deckCount}  tariff ${foe.tariff}  fallen ${foe.fallen}`)
+  add(`hp ${foe.heroHealth}/${foe.heroMaxHealth}  aether ${foe.aether}/${foe.aetherMax}  hand ${foe.handCount}  deck ${foe.deckCount}  tariff ${foe.tariff}  fallen ${foe.fallen}  healed ${foe.healed}`)
   if (foe.weapon !== null) add(`iron: ${nameOf(registry, foe.weapon.cardId)} ${foe.weapon.attack}/${foe.weapon.durability}`)
   add(`board: ${foe.board.map((minion) => minionText(minion, registry)).join('  ') || '(empty)'}`)
   add(`holdings: ${foe.holdings.map((holding) => holdingText(holding, registry)).join('  ') || '(none)'}`)
@@ -102,7 +104,7 @@ export function buildHud(input: HudInput): HudLine[] {
 
   const me = view.self
   add('-- you --', 'dim')
-  add(`hp ${me.heroHealth}/${me.heroMaxHealth}  aether ${me.aether}/${me.aetherMax}  deck ${me.deckCount}  tariff ${me.tariff}`)
+  add(`hp ${me.heroHealth}/${me.heroMaxHealth}  aether ${me.aether}/${me.aetherMax}  deck ${me.deckCount}  tariff ${me.tariff}  healed ${me.healed}`)
   const iron = me.weapon === null ? 'none' : `${nameOf(registry, me.weapon.cardId)} ${me.weapon.attack}/${me.weapon.durability}`
   add(`iron: ${iron}${me.heroAttacked ? ' (hero attacked)' : ''}   ability: cost ${me.ability.cost}${me.abilityUsed ? ' (used)' : ''}`)
 
