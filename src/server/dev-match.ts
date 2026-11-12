@@ -8,8 +8,9 @@ import { CHOIR_CARDS, CHOIR_HERO } from '../content/choir'
 import { CINDER_VANE_CARDS, CINDER_VANE_HERO } from '../content/cinder-vane'
 import { BRASSWRIGHT_CARDS, BRASSWRIGHT_HERO } from '../content/brasswright'
 import { GLASS_EYE_CARDS, GLASS_EYE_HERO } from '../content/glass-eye'
+import { LANTERN_BEARERS_CARDS, LANTERN_BEARERS_HERO } from '../content/lantern-bearers'
 
-const registry = createRegistry([...EXCHEQUER_CARDS, ...BRINE_LOCK_CARDS, ...BRIARTHORN_CARDS, ...CHOIR_CARDS, ...CINDER_VANE_CARDS, ...BRASSWRIGHT_CARDS, ...GLASS_EYE_CARDS])
+const registry = createRegistry([...EXCHEQUER_CARDS, ...BRINE_LOCK_CARDS, ...BRIARTHORN_CARDS, ...CHOIR_CARDS, ...CINDER_VANE_CARDS, ...BRASSWRIGHT_CARDS, ...GLASS_EYE_CARDS, ...LANTERN_BEARERS_CARDS])
 
 export const devContent: ContentLookup = {
   registry,
@@ -20,7 +21,8 @@ export const devContent: ContentLookup = {
     [CHOIR_HERO.id, CHOIR_HERO],
     [CINDER_VANE_HERO.id, CINDER_VANE_HERO],
     [BRASSWRIGHT_HERO.id, BRASSWRIGHT_HERO],
-    [GLASS_EYE_HERO.id, GLASS_EYE_HERO]
+    [GLASS_EYE_HERO.id, GLASS_EYE_HERO],
+    [LANTERN_BEARERS_HERO.id, LANTERN_BEARERS_HERO]
   ])
 }
 
