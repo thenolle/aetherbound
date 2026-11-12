@@ -1,13 +1,15 @@
 import { describe, expect, test } from 'bun:test'
+import { createMatch } from '../rules/engine'
 import type { Minion } from '../rules/types'
-import { attackTarget, playMatch } from './bot'
+import { parseId } from '../shared/ids'
+import { attackTarget, candidates, chooseTarget, playMatch } from './bot'
 import { CONTENDERS, SIM_REGISTRY } from './contenders'
 import { formatReport } from './report'
 import { runTournament } from './tournament'
 
 const mk = (uid: number, attack: number, health: number, extra: Partial<Minion> = {}): Minion => ({
   uid,
-  cardId: CONTENDERS[0]?.deck[0] ?? ('' as never),
+  cardId: (SIM_REGISTRY.keys().next().value ?? '') as Minion['cardId'],
   attack,
   health,
   maxHealth: health,
@@ -52,6 +54,40 @@ describe('bot', () => {
     expect(attackTarget(mk(1, 3, 4), [mk(2, 1, 3), mk(3, 2, 2)])).toEqual({ kind: 'minion', uid: 2 })
     expect(attackTarget(mk(1, 3, 4), [mk(2, 1, 1, { warded: true })])).toEqual({ kind: 'hero' })
     expect(attackTarget(mk(1, 2, 2), [mk(2, 5, 5)])).toEqual({ kind: 'hero' })
+  })
+
+  test('removal goes to the best minion it can kill, skipping warded ones, and freezes go to the hardest hitter', () => {
+    const damage = [{ kind: 'damage', amount: 3, target: 'chosen-enemy-minion' }] as const
+    expect(chooseTarget(damage, [mk(1, 5, 5), mk(2, 3, 3), mk(3, 2, 2)])?.uid).toBe(2)
+    expect(chooseTarget(damage, [mk(2, 3, 3, { warded: true }), mk(3, 1, 1)])?.uid).toBe(3)
+    const freeze = [{ kind: 'freeze', target: 'chosen-enemy-minion' }] as const
+    expect(chooseTarget(freeze, [mk(1, 1, 9), mk(2, 4, 2)])?.uid).toBe(2)
+  })
+
+  test('with lethal on board every ready minion goes for the hero, otherwise it takes the safe kill', () => {
+    const state = createMatch(setup(3)).state
+    const me = state.players[0]
+    const foe = state.players[1]
+    me.hand = []
+    me.aether = 0
+    me.board = [mk(1, 5, 5)]
+    foe.board = [mk(2, 1, 1)]
+    foe.heroHealth = 4
+    expect(candidates(state, 0, SIM_REGISTRY).next().value).toEqual({ type: 'attack', attackerUid: 1, target: { kind: 'hero' } })
+    foe.heroHealth = 30
+    expect(candidates(state, 0, SIM_REGISTRY).next().value).toEqual({ type: 'attack', attackerUid: 1, target: { kind: 'minion', uid: 2 } })
+  })
+
+  test('a miracle card is held back until the healed threshold is within reach', () => {
+    const state = createMatch(setup(4)).state
+    const me = state.players[0]
+    me.hand = [parseId('card', 'miracle-worker')]
+    me.aether = 10
+    me.healed = 0
+    const plays = () => [...candidates(state, 0, SIM_REGISTRY)].filter((command) => command.type === 'play')
+    expect(plays()).toHaveLength(0)
+    me.healed = 6
+    expect(plays()).toHaveLength(1)
   })
 })
 
