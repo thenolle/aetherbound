@@ -19,7 +19,7 @@ export const CHOIR_HERO: HeroDefinition = {
   title: { en: 'Knell-Monk', fr: 'Moine du Glas' },
   faction: 'choir',
   health: 30,
-  ability: { name: { en: 'Toll Bell', fr: 'Sonner le Glas' }, cost: 2, effects: [drain(1)] }
+  ability: { name: { en: 'Toll Bell', fr: 'Sonner le Glas' }, cost: 1, effects: [drain(1)] }
 }
 
 export const CHOIR_CARDS: readonly CardDefinition[] = [
@@ -35,10 +35,10 @@ export const CHOIR_CARDS: readonly CardDefinition[] = [
   card('tolling-abbess', 'bound', 'rare', 5, ['Tolling Abbess', 'Abbesse du Glas'], ['Each stroke costs someone.', "Chaque coup coute a quelqu'un."], { attack: 4, health: 6 }, { onPlay: [drain(3)] }),
   card('the-last-sexton', 'bound', 'legendary', 7, ['The Last Sexton', 'Le Dernier Sacristain'], ['He has buried the city twice.', 'Il a enterre la ville deux fois.'], { attack: 6, health: 7 }, { unique: true, keywords: ['echo'], onDeath: [raise(2), drain(2)] }),
   card('bronze-handbell', 'iron', 'common', 2, ['Bronze Handbell', 'Clochette de Bronze'], ['Struck once, it is heard everywhere.', "Frappee une fois, elle s'entend partout."], { attack: 2 }, { durability: 2 }),
-  card('writ-of-requiem', 'writ', 'common', 3, ['Writ of Requiem', 'Mandat de Requiem'], ['Read aloud, as is the custom.', "Lu a voix haute, comme le veut l'usage."], {}, { effects: [raise(2), drain(1)] }),
-  card('writ-of-last-rites', 'writ', 'rare', 4, ['Writ of Last Rites', 'Mandat des Derniers Sacrements'], ['The sentence and the service, together.', "La sentence et l'office, ensemble."], {}, { effects: [{ kind: 'damage', amount: 3, target: 'chosen-enemy-minion' }, raise(1)] }),
+  card('writ-of-requiem', 'writ', 'common', 2, ['Writ of Requiem', 'Mandat de Requiem'], ['Read aloud, as is the custom.', "Lu a voix haute, comme le veut l'usage."], {}, { effects: [raise(2), drain(1)] }),
+  card('writ-of-last-rites', 'writ', 'rare', 3, ['Writ of Last Rites', 'Mandat des Derniers Sacrements'], ['The sentence and the service, together.', "La sentence et l'office, ensemble."], {}, { effects: [{ kind: 'damage', amount: 3, target: 'chosen-enemy-minion' }, raise(1)] }),
   card('charnel-vault', 'holding', 'common', 3, ['Charnel Vault', 'Charnier'], ['Nothing leaves. Some things return.', 'Rien ne sort. Certaines choses reviennent.'], {}, { durability: 3, effects: [raise(1)] }),
   card('funeral-bell', 'snare', 'common', 2, ['Funeral Bell', 'Cloche Funebre'], ['Rung for the one who just arrived.', "Sonnee pour celui qui vient d'arriver."], {}, { trigger: 'enemy-play', effects: [drain(2)] }),
-  card('oath-of-unpaid-debts', 'oath', 'epic', 3, ['Oath of Unpaid Debts', 'Serment des Dettes Impayees'], ['Three paid, and the rest are called in.', 'Trois payees, et les autres sont reclamees.'], {}, { goal: 3, effects: [raise(3), { kind: 'heal', amount: 4, target: 'own-hero' }] })
+  card('oath-of-unpaid-debts', 'oath', 'epic', 3, ['Oath of Unpaid Debts', 'Serment des Dettes Impayees'], ['Three paid, and the rest are called in.', 'Trois payees, et les autres sont reclamees.'], {}, { goal: 2, effects: [raise(3), { kind: 'heal', amount: 4, target: 'own-hero' }] })
 ]
 export const CHOIR_DECK: readonly Id<'card'>[] = CHOIR_CARDS.filter((entry) => !entry.unique && entry.token !== true).flatMap((entry) => [entry.id, entry.id])
