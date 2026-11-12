@@ -10,7 +10,7 @@ export const EXCHEQUER_HERO: HeroDefinition = {
   health: 30,
   ability: {
     name: { en: 'Stamp Tariff', fr: 'Apposer le Tarif' },
-    cost: 2,
+    cost: 1,
     effects: [{ kind: 'tariff', amount: 1 }]
   }
 }
@@ -24,7 +24,7 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
     rarity: 'common',
     cost: 1,
     unique: false,
-    attack: 1,
+    attack: 2,
     health: 2,
     flavor: { en: 'Every debt has a column. Every column has a clerk.', fr: 'Chaque dette a sa colonne. Chaque colonne a son commis.' }
   },
@@ -62,7 +62,7 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
     cost: 2,
     unique: false,
     attack: 2,
-    health: 3,
+    health: 4,
     flavor: { en: 'The bridge is free. Crossing it is not.', fr: 'Le pont est gratuit. Le traverser, non.' }
   },
   {
@@ -99,7 +99,7 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
     rarity: 'rare',
     cost: 3,
     unique: false,
-    attack: 3,
+    attack: 4,
     health: 3,
     flavor: { en: 'Paid in full, or paid in kind.', fr: 'Paye en totalite, ou paye en nature.' }
   },
@@ -111,7 +111,7 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
     rarity: 'rare',
     cost: 3,
     unique: false,
-    attack: 2,
+    attack: 3,
     health: 3,
     onPlay: [{ kind: 'damage', amount: 1, target: 'chosen-enemy-minion' }],
     flavor: { en: 'Every wall gets measured. Some get measured down.', fr: 'Chaque mur est mesure. Certains sont mesures a la baisse.' }
@@ -172,7 +172,7 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
     rarity: 'common',
     cost: 2,
     unique: false,
-    attack: 2,
+    attack: 3,
     durability: 2,
     flavor: { en: 'Measured twice, driven once.', fr: 'Mesuree deux fois, plantee une fois.' }
   },
@@ -185,7 +185,7 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
     cost: 3,
     unique: false,
     durability: 3,
-    effects: [{ kind: 'tariff', amount: 1 }],
+    effects: [{ kind: 'tariff', amount: 2 }],
     flavor: { en: 'Every crossing is logged. Every log is billed.', fr: 'Chaque passage est consigne. Chaque consignation est facturee.' }
   },
   {
@@ -229,7 +229,7 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
     faction: 'exchequer',
     family: 'writ',
     rarity: 'common',
-    cost: 3,
+    cost: 2,
     unique: false,
     effects: [{ kind: 'draw', count: 2 }],
     flavor: { en: 'Take what is owed. Then take a little more.', fr: 'Prenez ce qui est du. Puis un peu plus.' }
@@ -240,7 +240,7 @@ export const EXCHEQUER_CARDS: readonly CardDefinition[] = [
     faction: 'exchequer',
     family: 'writ',
     rarity: 'rare',
-    cost: 4,
+    cost: 3,
     unique: false,
     effects: [{ kind: 'damage', amount: 2, target: 'all-enemy-minions' }],
     flavor: { en: 'The ledger is read aloud. Nobody enjoys it.', fr: "On lit le registre a voix haute. Personne n'aime ca." }

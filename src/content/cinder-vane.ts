@@ -21,10 +21,10 @@ export const CINDER_VANE_HERO: HeroDefinition = {
 
 export const CINDER_VANE_CARDS: readonly CardDefinition[] = [
   card('ash-runner', 'bound', 'common', 1, ['Ash-Runner', 'Coureur de Cendre'], ['No time to look back. No wish to.', "Pas le temps de regarder en arriere. Pas l'envie non plus."], { attack: 2, health: 1 }, { keywords: ['haste'] }),
-  card('trench-raider', 'bound', 'common', 2, ['Trench-Raider', 'Pilleur de Tranchee'], ['He signs for nothing and takes the rest.', 'Il ne signe rien et prend le reste.'], { attack: 3, health: 1 }, { keywords: ['haste'] }),
+  card('trench-raider', 'bound', 'common', 2, ['Trench-Raider', 'Pilleur de Tranchee'], ['He signs for nothing and takes the rest.', 'Il ne signe rien et prend le reste.'], { attack: 2, health: 2 }, { keywords: ['haste'] }),
   card('flare-bearer', 'bound', 'common', 2, ['Flare-Bearer', 'Porte-Fusee'], ['Lit before the order is given.', "Allumee avant que l'ordre soit donne."], { attack: 2, health: 2 }, { onPlay: [{ kind: 'damage', amount: 1, target: 'enemy-hero' }] }),
   card('fissure-hound', 'bound', 'common', 2, ['Fissure-Hound', 'Limier de la Fissure'], ['It runs where the ground is warm.', 'Il court la ou le sol est tiede.'], { attack: 2, health: 3 }),
-  card('scorched-sapper', 'bound', 'common', 3, ['Scorched Sapper', 'Sapeur Roussi'], ['Short fuse, long reach.', 'Meche courte, longue portee.'], { attack: 3, health: 2 }, { keywords: ['haste'], onDeath: [{ kind: 'damage', amount: 2, target: 'enemy-hero' }] }),
+  card('scorched-sapper', 'bound', 'common', 3, ['Scorched Sapper', 'Sapeur Roussi'], ['Short fuse, long reach.', 'Meche courte, longue portee.'], { attack: 3, health: 2 }, { onDeath: [{ kind: 'damage', amount: 2, target: 'enemy-hero' }] }),
   card('self-venting-gunner', 'bound', 'common', 3, ['Self-Venting Gunner', 'Tireur sous Pression'], ['The tank hisses. He grins.', 'Le reservoir siffle. Il sourit.'], { attack: 4, health: 3 }, { onPlay: [selfBurn(2)] }),
   card('breach-captain', 'bound', 'rare', 4, ['Breach-Captain', 'Capitaine de Breche'], ['First through, last to explain.', "Premier passe, dernier a s'expliquer."], { attack: 4, health: 3 }, { keywords: ['haste'] }),
   card('ember-sergeant', 'bound', 'rare', 4, ['Ember-Sergeant', 'Sergent de Braise'], ['He marks the line with sparks.', "Il marque la ligne a coups d'etincelles."], { attack: 3, health: 5 }, { onPlay: [{ kind: 'damage', amount: 1, target: 'all-enemy-minions' }] }),
