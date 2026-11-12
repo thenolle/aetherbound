@@ -8,6 +8,7 @@
     "dev": "bun --watch src/server/main.ts",
     "start": "bun run src/server/main.ts",
     "typecheck": "tsc --noEmit",
+    "balance": "bun run src/tools/balance.ts",
     "test": "bun test",
     "deps:check": "bun run src/tools/check-deps.ts",
     "season:close": "bun run src/tools/close-season.ts",
