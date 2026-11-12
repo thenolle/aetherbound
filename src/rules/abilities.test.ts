@@ -59,7 +59,8 @@ describe('hero ability', () => {
     const afterTariff = step(start([{ kind: 'tariff', amount: 1 }]), 0, ability)
     expect(afterTariff.events).toContainEqual({ type: 'taxed', player: 1, amount: 1 })
     const theirTurn = step(afterTariff.state, 0, endTurn).state
-    expect(theirTurn.players[1]).toMatchObject({ aetherMax: 1, aether: 0, tariff: 0 })
+    expect(theirTurn.players[1]).toMatchObject({ aetherMax: 1, aether: 1, tariff: 0 })
+    expect(step(start(), 0, endTurn).state.players[1].aether - theirTurn.players[1].aether).toBe(1)
     const backToThem = step(step(theirTurn, 1, endTurn).state, 0, endTurn).state
     expect(backToThem.players[1]).toMatchObject({ aetherMax: 2, aether: 2 })
   })
