@@ -52,9 +52,9 @@ describe('steal', () => {
     expect(taken.players[0].hand).toEqual([cid(5), cid(6)])
     expect(taken.players[1].deck).toEqual([cid(7)])
     const crowded = fresh()
-    crowded.players[0].hand = [cid(2), ...Array.from({ length: 8 }, () => cid(1))]
+    crowded.players[0].hand = [cid(2), ...Array.from({ length: 9 }, () => cid(1))]
     const { state: next, events } = step(crowded, 0, { type: 'cast', handIndex: 0 })
-    expect(next.players[0].hand).toHaveLength(9)
+    expect(next.players[0].hand).toHaveLength(10)
     expect(next.players[1].deck).toEqual([cid(7)])
     expect(events.filter((event) => event.type === 'card_stolen')).toHaveLength(1)
     expect(events.some((event) => event.type === 'card_burned')).toBe(false)
